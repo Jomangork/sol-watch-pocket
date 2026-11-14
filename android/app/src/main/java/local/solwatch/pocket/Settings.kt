@@ -62,6 +62,11 @@ object Settings {
 
     fun setAutoUpdate(context: Context, on: Boolean) = prefs(context).edit().putBoolean("auto_update", on).apply()
 
+    /** Every alert makes a sound, not only urgent ones and chat. */
+    fun soundAll(context: Context) = prefs(context).getBoolean("sound_all", false)
+
+    fun setSoundAll(context: Context, on: Boolean) = prefs(context).edit().putBoolean("sound_all", on).apply()
+
     fun enabled(context: Context) = prefs(context).getBoolean(ENABLED, false)
 
     fun setEnabled(context: Context, on: Boolean) = prefs(context).edit().putBoolean(ENABLED, on).apply()

@@ -52,6 +52,7 @@ APP_WORDING = (
 CHAT_MARKS = ("💬", "🤝")
 STATUS_EVERY_SECONDS = 15
 FIRST_WIDGET_READ_SECONDS = 20  # let the bridge's own startup reads go first
+FIRST_UPDATE_CHECK_SECONDS = 120
 
 # What this wrapper uses from sol_watch.py. A newer bridge that renames any of these
 # is refused with this list rather than half-working.
@@ -129,7 +130,7 @@ def plain(module, text):
 
 class Runner:
     def __init__(self, folder, api_key, sender, checks=None, timezone=None, settings=BASE_SETTINGS,
-                 code_dir=None, auto_update=False):
+                 code_dir=None, auto_update=False, update_every=86400):
         self.folder = Path(folder)
         self.api_key = api_key
         self.sender = sender
@@ -146,6 +147,8 @@ class Runner:
         self.code_dir = code_dir        # where downloaded bridge updates live (None: never download)
         self.auto_update = auto_update
         self._update_wanted = None     # a version the bridge's own check says is published
+        self.update_every = update_every  # seconds between the app's own GitHub checks (hourly on Wi-Fi)
+        self._next_update_check = time.monotonic() + FIRST_UPDATE_CHECK_SECONDS
         self.updated = False
         self._trial_done = False
         self.tapped = {}  # path -> last body the bridge read
@@ -174,6 +177,10 @@ class Runner:
     def set_checks_json(self, text):
         """set_checks() for callers that only pass strings (the app)."""
         return json.dumps(self.set_checks(json.loads(text)))
+
+    def set_update_every(self, seconds):
+        """How often to look for a newer bridge on GitHub (the app: hourly on Wi-Fi, daily on mobile data)."""
+        self.update_every = max(600, int(seconds or 0)) if seconds else 0
 
     def is_off(self, check_id):
         return self.checks.get(check_id, 1) == 0
@@ -309,8 +316,26 @@ class Runner:
             pass
 
     def _maybe_update(self):
-        """Install a published bridge the daily check found, then restart into it (from heartbeat)."""
-        if not self._update_wanted or self._in_feed:
+        """Look for a newer bridge on GitHub every update_every seconds; install one that the bridge's
+        own daily check or this check found, then restart into it. Runs from heartbeat."""
+        if self._in_feed:
+            return
+        now = time.monotonic()
+        if (not self._update_wanted and self.auto_update and self.code_dir and self.update_every
+                and now >= self._next_update_check):
+            self._next_update_check = now + self.update_every
+            self._in_feed = True
+            try:
+                published = pocket_update.published_version(
+                    getattr(self.module, "BRIDGE_SOURCE_URL", pocket_update.DEFAULT_SOURCE_URL))
+            except Exception:
+                published = None
+            finally:
+                self._in_feed = False
+            if (published and pocket_update.version_tuple(published) > pocket_update.version_tuple(self.module.VERSION)
+                    and not pocket_update.is_rejected(self.code_dir, published)):
+                self._update_wanted = published
+        if not self._update_wanted:
             return
         version, self._update_wanted = self._update_wanted, None
         self._in_feed = True

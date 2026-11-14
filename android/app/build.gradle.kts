@@ -13,8 +13,8 @@ android {
         applicationId = "local.solwatch.pocket"
         minSdk = 29
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.5.0"
+        versionCode = 11
+        versionName = "0.6.0"
         // No key is ever built in (since 0.4.0): the user pastes theirs on the Status screen.
         buildConfigField("String", "TEST_API_KEY", "\"\"")
         ndk {
@@ -77,4 +77,5 @@ dependencies {
     implementation("androidx.glance:glance-appwidget:1.1.1")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")  // the real org.json, for parsing in JVM tests
 }

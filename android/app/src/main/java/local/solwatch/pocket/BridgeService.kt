@@ -49,6 +49,7 @@ class BridgeService : Service() {
     @Volatile private var restartRequested = false
     private var wakeLock: PowerManager.WakeLock? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var updateChecker: Thread? = null
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key != null && key.startsWith("checks_") || key == "separate_mobile") applyChecks()
     }
@@ -93,6 +94,19 @@ class BridgeService : Service() {
             Settings.prefs(this).registerOnSharedPreferenceChangeListener(prefsListener)
             watchNetwork()
         }
+        if (updateChecker?.isAlive != true) {
+            // App updates: hourly on Wi-Fi, daily on mobile data, while SOL-Watch runs.
+            updateChecker = Thread({
+                try {
+                    while (!Thread.currentThread().isInterrupted) {
+                        val metered = metered()
+                        if (AppUpdater.due(this, metered)) runCatching { AppUpdater.check(this, metered, manual = false) }
+                        Thread.sleep(10 * 60 * 1000L)
+                    }
+                } catch (_: InterruptedException) {
+                }
+            }, "app-updates").apply { isDaemon = true; start() }
+        }
         // Never a second bridge thread: if the last one is still ending, it starts the bridge again itself.
         if (thread?.isAlive == true) {
             restartRequested = true
@@ -116,6 +130,7 @@ class BridgeService : Service() {
                     "Runner", folder.absolutePath, key, Sender(this), checks, TimeZone.getDefault().id,
                     Kwarg("code_dir", codeDir(this).absolutePath),
                     Kwarg("auto_update", Settings.autoUpdate(this)),
+                    Kwarg("update_every", updateEvery(metered())),
                 )
                 runner = created
                 publish(_status.value.copy(running = true, message = "Starting the bridge…", error = "", metered = metered()))
@@ -152,7 +167,10 @@ class BridgeService : Service() {
 
     private fun applyChecks() {
         val current = runner ?: return
-        runCatching { current.callAttr("set_checks_json", Settings.activeIntervalsJson(this, metered())) }
+        runCatching {
+            current.callAttr("set_checks_json", Settings.activeIntervalsJson(this, metered()))
+            current.callAttr("set_update_every", updateEvery(metered()))
+        }
             .onFailure { Log.w(TAG, "Couldn't change the checks", it) }
         publish(_status.value.copy(metered = metered()))
     }
@@ -179,6 +197,8 @@ class BridgeService : Service() {
         networkCallback?.let { runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(it) } }
         networkCallback = null
         Settings.prefs(this).unregisterOnSharedPreferenceChangeListener(prefsListener)
+        updateChecker?.interrupt()
+        updateChecker = null
         wakeLock?.takeIf { it.isHeld }?.release()
         wakeLock = null
         publish(_status.value.copy(running = false, message = "Stopped"))
@@ -244,6 +264,9 @@ class BridgeService : Service() {
         const val ACTION_RESTART = "local.solwatch.pocket.RESTART"
         const val LAST_POLL_AT = "last_poll_at"
         const val KEY_REJECTED = "key_rejected"
+
+        /** How often to look for updates on GitHub (the bridge here, the app in AppUpdater). */
+        fun updateEvery(metered: Boolean) = if (metered) 24 * 3600 else 3600
 
         /** Where bridge updates downloaded from GitHub are kept. */
         fun codeDir(context: Context) = File(context.filesDir, "bridge_code")

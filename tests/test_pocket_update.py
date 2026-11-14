@@ -126,6 +126,33 @@ class RunnerUpdates(unittest.TestCase):
         self.assertFalse(self.runner.updated)
         self.assertIn("Not installing", self.sender.delivered[-1])
 
+    def test_the_hourly_check_finds_a_newer_bridge(self):
+        original = pocket_update.published_version
+        pocket_update.published_version = lambda *a, **k: "9.99.99"
+        pocket_update.fetch_and_install = lambda *a, **k: (True, "Installed bridge v9.99.99 (was v1).")
+        try:
+            self.runner.update_every = 3600
+            self.runner._next_update_check = 0
+            with self.assertRaises(pocket_runner.PocketStop):
+                self.runner._maybe_update()
+            self.assertTrue(self.runner.updated)
+        finally:
+            pocket_update.published_version = original
+
+    def test_the_hourly_check_waits_its_turn_and_ignores_older(self):
+        original = pocket_update.published_version
+        calls = []
+        pocket_update.published_version = lambda *a, **k: calls.append(1) or "0.0.1"
+        try:
+            self.runner.update_every = 3600
+            self.runner._next_update_check = 0
+            self.runner._maybe_update()   # checks: older than ours, nothing to do
+            self.runner._maybe_update()   # not due again for an hour
+            self.assertEqual(len(calls), 1)
+            self.assertFalse(self.runner.updated)
+        finally:
+            pocket_update.published_version = original
+
     def test_without_auto_update_the_notice_is_only_passed_on(self):
         self.runner.auto_update = False
         self.sw.Discord(enabled=True).post("pocket://corp", "BRIDGE UPDATE",

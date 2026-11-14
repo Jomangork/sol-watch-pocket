@@ -63,11 +63,24 @@ class MainActivity : ComponentActivity() {
             return
         }
         enableEdgeToEdge()
+        handleInstall(intent)
         LookState.load(this)
         setContent {
             PocketTheme(accentFor(LookState.accent).color) { PocketScreens() }
         }
     }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleInstall(intent)
+    }
+}
+
+/** "Tap to install" on the update notification: install while the app is on screen. */
+private fun ComponentActivity.handleInstall(intent: android.content.Intent?) {
+    if (intent?.action != AppUpdater.ACTION_INSTALL) return
+    val app = this
+    Thread { AppUpdater.install(app) }.start()
 }
 
 private val TABS = listOf("🔔" to "Alerts", "⏱️" to "Checks", "📡" to "Status")

@@ -136,6 +136,20 @@ def fetch_and_install(code_dir, running_version, required, url=DEFAULT_SOURCE_UR
     return install(code_dir, response.text, running_version, required)
 
 
+def published_version(url=DEFAULT_SOURCE_URL):
+    """The VERSION of the published sol_watch.py, reading only its start (VERSION is near the top). None if unknown."""
+    import requests
+    try:
+        response = requests.get(url, timeout=20, headers={"Range": "bytes=0-16383"})
+    except requests.RequestException:
+        return None
+    return version_of(response.text) if response.status_code in (200, 206) else None
+
+
+def is_rejected(code_dir, version):
+    return version in _rejected(code_dir)
+
+
 def trial_passed(code_dir):
     """The new bridge made enough checks: keep it."""
     (Path(code_dir) / TRIAL).unlink(missing_ok=True)

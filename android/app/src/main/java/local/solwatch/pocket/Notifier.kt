@@ -13,9 +13,11 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 
 /**
- * Turns alerts into notifications. 🚨 / 🚨⚔️ / 🆘 go to the loud Urgent channel, one
- * notification each; everything else is silent, grouped per bridge channel.
- * Each Android channel's sound and Do Not Disturb behaviour can be changed in system settings.
+ * Turns alerts into notifications. 🚨 / 🚨⚔️ / 🆘 / 🔑 go to the loud Urgent channel, one
+ * notification each; everything else is grouped per bridge channel, silent by default.
+ * "Sound for every alert" (Settings.soundAll) sends those to twin channels that make a sound,
+ * because Android fixes a channel's importance when it is first made. Each channel's sound can
+ * still be changed in Android's settings: the app never forces a notification silent.
  */
 object Notifier {
     const val URGENT = "urgent"
@@ -26,6 +28,9 @@ object Notifier {
         "general" to "General",
         "alliance" to "Alliance",
     )
+    // Twins of the quiet channels that make a sound, for "Sound for every alert".
+    private fun soundId(id: String) = "${id}_sound"
+
     // Chat makes a sound (unlike the other quiet channels). A new id, because Android keeps a
     // channel's importance from when it was first made: the old silent "chat" channel is removed.
     const val CHAT = "chat_messages"
@@ -44,6 +49,14 @@ object Notifier {
             manager.createNotificationChannel(
                 NotificationChannel(id, name, NotificationManager.IMPORTANCE_LOW).apply {
                     description = "Everything else the bridge would post to $name, silently"
+                }
+            )
+        }
+        for ((id, name) in QUIET) {
+            manager.createNotificationChannel(
+                NotificationChannel(soundId(id), "$name (with sound)", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = "Everything else the bridge would post to $name, with a sound " +
+                        "(used when Sound for every alert is on)"
                 }
             )
         }
@@ -74,7 +87,8 @@ object Notifier {
         val androidChannel = when (priority) {
             "urgent" -> URGENT
             "chat" -> CHAT
-            else -> channel.takeIf { c -> QUIET.any { it.first == c } } ?: "corp"
+            else -> (channel.takeIf { c -> QUIET.any { it.first == c } } ?: "corp")
+                .let { if (Settings.soundAll(context)) soundId(it) else it }
         }
         val builder = NotificationCompat.Builder(context, androidChannel)
             .setSmallIcon(R.drawable.ic_notify)
@@ -91,9 +105,10 @@ object Notifier {
             manager.notify(nextId++, builder.build())
             return
         }
-        val quiet = androidChannel != CHAT
+        // No setSilent here: the channel decides, so a sound chosen in Android's settings plays.
+        val quiet = QUIET.any { it.first == androidChannel }
         builder.setPriority(if (quiet) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_DEFAULT)
-            .setGroup(androidChannel).setSilent(quiet)
+            .setGroup(androidChannel)
         manager.notify(nextId++, builder.build())
         manager.notify(
             androidChannel.hashCode(),
@@ -101,6 +116,7 @@ object Notifier {
                 .setSmallIcon(R.drawable.ic_notify)
                 .setGroup(androidChannel)
                 .setGroupSummary(true)
+                .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)  // the alert sounds, not its summary
                 .setSilent(true)
                 .setContentIntent(openApp(context))
                 .setAutoCancel(true)

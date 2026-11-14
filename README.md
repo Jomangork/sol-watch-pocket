@@ -13,7 +13,9 @@ It's a player-made tool, not made or supported by the game's developers.
 - **Checks menu.** Each of the bridge's checks can run at its own interval or be switched off, with presets (Recommended, Saver, Fast). The menu shows reads a minute against the game's limit and an estimate of the data each check uses. Mobile data can have its own settings, applied when the phone leaves Wi-Fi.
 - **Home-screen widget:** the latest urgent alert, money and income, research, and the next arrivals. It shows more when it's bigger.
 - **Status:** a green, yellow or red dot. Shows which sections your API key can read, plus the bridge's own log.
-- **Bridge updates from GitHub,** optional and on by default. A new `sol_watch.py` is checked before it's used (newer, compiles, still has what the app hooks into), runs on trial, and is rolled back if it fails to start.
+- **Bridge updates from GitHub,** optional and on by default, checked hourly on Wi-Fi and daily on mobile data. A new `sol_watch.py` is checked before it's used (newer, compiles, still has what the app hooks into), runs on trial, and is rolled back if it fails to start.
+- **App updates from this repository's releases,** checked hourly on Wi-Fi and daily on mobile data, and downloaded only on Wi-Fi. The app installs an update only if it's the same app, newer, and signed with the same key. The first time, Android asks you to allow the app to install updates.
+- **Sound for every alert,** a switch on the Status tab, if you want to hear everything, not only urgent alerts and chat.
 - **Your company and alliance logos,** from the game's logo share code or an image file.
 
 ## Install

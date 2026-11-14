@@ -331,6 +331,18 @@ fun StatusScreen(modifier: Modifier) {
                         )
                     }) { Text("Allow background running") }
                 }
+                var soundAll by remember { mutableStateOf(Settings.soundAll(context)) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Sound for every alert")
+                        Text(
+                            if (soundAll) "Every alert makes a sound." else "Only urgent alerts and chat make a sound.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = soundAll, onCheckedChange = { soundAll = it; Settings.setSoundAll(context, it) })
+                }
                 TextButton(onClick = {
                     context.startActivity(
                         Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS)
@@ -344,11 +356,51 @@ fun StatusScreen(modifier: Modifier) {
                 )
             }
         }
+        AppUpdateCard(metered = status.metered)
         BridgeUpdateCard(running = status.running)
         PersonaliseCard()
         ApiKeyCard(running = status.running)
         LogCard("Problems (errors.log)", errors.ifBlank { "None" })
         LogCard("Recent log (bridge.log)", log.ifBlank { "Nothing yet" })
+    }
+}
+
+/** The app's own version, its GitHub release check, and installing a downloaded update. */
+@Composable
+private fun AppUpdateCard(metered: Boolean) {
+    val context = LocalContext.current
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf(AppUpdater.message(context)) }
+    var ready by remember { mutableStateOf(AppUpdater.readyVersion(context)) }
+    var action by remember { mutableStateOf("") }
+    LaunchedEffect(action) {
+        if (action.isEmpty()) return@LaunchedEffect
+        message = withContext(Dispatchers.IO) {
+            if (action == "check") AppUpdater.check(context, metered, manual = true) else AppUpdater.install(context)
+        }
+        ready = AppUpdater.readyVersion(context)
+        busy = false
+        action = ""
+    }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("App updates", fontWeight = FontWeight.SemiBold)
+            Text(
+                "SOL-Watch Pocket ${BuildConfig.VERSION_NAME}. Checks github.com/${AppUpdater.REPO} hourly on Wi-Fi " +
+                    "and daily on mobile data while running; downloads only on Wi-Fi.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { busy = true; action = "check" }, enabled = !busy) {
+                    Text(if (busy && action == "check") "Checking…" else "Check now")
+                }
+                ready?.let { version ->
+                    Button(onClick = { busy = true; action = "install" }, enabled = !busy) { Text("Install $version") }
+                }
+            }
+            if (message.isNotBlank()) Text(message, style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 
