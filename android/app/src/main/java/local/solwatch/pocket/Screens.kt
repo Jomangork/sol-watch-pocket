@@ -356,7 +356,7 @@ fun StatusScreen(modifier: Modifier) {
                 )
             }
         }
-        AppUpdateCard(metered = status.metered)
+        AppUpdateCard()
         BridgeUpdateCard(running = status.running)
         PersonaliseCard()
         ApiKeyCard(running = status.running)
@@ -365,38 +365,33 @@ fun StatusScreen(modifier: Modifier) {
     }
 }
 
-/** The app's own version, its GitHub release check, and installing a downloaded update. */
+/** The app's own version, its GitHub release check, and a link to download a newer one. */
 @Composable
-private fun AppUpdateCard(metered: Boolean) {
+private fun AppUpdateCard() {
     val context = LocalContext.current
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf(AppUpdater.message(context)) }
-    var ready by remember { mutableStateOf(AppUpdater.readyVersion(context)) }
-    var action by remember { mutableStateOf("") }
-    LaunchedEffect(action) {
-        if (action.isEmpty()) return@LaunchedEffect
-        message = withContext(Dispatchers.IO) {
-            if (action == "check") AppUpdater.check(context, metered, manual = true) else AppUpdater.install(context)
-        }
-        ready = AppUpdater.readyVersion(context)
+    var available by remember { mutableStateOf(AppUpdater.available(context)) }
+    LaunchedEffect(busy) {
+        if (!busy) return@LaunchedEffect
+        message = withContext(Dispatchers.IO) { AppUpdater.check(context) }
+        available = AppUpdater.available(context)
         busy = false
-        action = ""
     }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("App updates", fontWeight = FontWeight.SemiBold)
             Text(
                 "SOL-Watch Pocket ${BuildConfig.VERSION_NAME}. Checks github.com/${AppUpdater.REPO} hourly on Wi-Fi " +
-                    "and daily on mobile data while running; downloads only on Wi-Fi.",
+                    "and daily on mobile data while running. A new version downloads in your browser; open the " +
+                    "download to install it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { busy = true; action = "check" }, enabled = !busy) {
-                    Text(if (busy && action == "check") "Checking…" else "Check now")
-                }
-                ready?.let { version ->
-                    Button(onClick = { busy = true; action = "install" }, enabled = !busy) { Text("Install $version") }
+                OutlinedButton(onClick = { busy = true }, enabled = !busy) { Text(if (busy) "Checking…" else "Check now") }
+                available?.let { (version, url) ->
+                    Button(onClick = { AppUpdater.openDownload(context, url) }) { Text("Download $version") }
                 }
             }
             if (message.isNotBlank()) Text(message, style = MaterialTheme.typography.bodySmall)

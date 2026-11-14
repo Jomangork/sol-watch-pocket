@@ -100,7 +100,7 @@ class BridgeService : Service() {
                 try {
                     while (!Thread.currentThread().isInterrupted) {
                         val metered = metered()
-                        if (AppUpdater.due(this, metered)) runCatching { AppUpdater.check(this, metered, manual = false) }
+                        if (AppUpdater.due(this, metered)) runCatching { AppUpdater.check(this) }
                         Thread.sleep(10 * 60 * 1000L)
                     }
                 } catch (_: InterruptedException) {
