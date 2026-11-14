@@ -356,12 +356,50 @@ fun StatusScreen(modifier: Modifier) {
                 )
             }
         }
+        UsageCard(tick)
         AppUpdateCard()
         BridgeUpdateCard(running = status.running)
         PersonaliseCard()
         ApiKeyCard(running = status.running)
         LogCard("Problems (errors.log)", errors.ifBlank { "None" })
         LogCard("Recent log (bridge.log)", log.ifBlank { "Nothing yet" })
+    }
+}
+
+/** TEMPORARY (see UsageLog): battery drain and data use measured by the app itself. */
+@Composable
+private fun UsageCard(tick: Int) {
+    val context = LocalContext.current
+    var cleared by remember { mutableStateOf(0) }
+    val samples by produceState(emptyList<UsageLog.Sample>(), tick, cleared) {
+        value = withContext(Dispatchers.IO) { UsageLog.read(context) }
+    }
+    var copied by remember { mutableStateOf(false) }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Battery and data log (temporary)", fontWeight = FontWeight.SemiBold)
+            val since = samples.firstOrNull()?.time
+            Text(
+                if (since == null) "Records every 10 minutes while SOL-Watch runs; the first sample comes soon."
+                else "Recording every 10 minutes since ${shortTime(since / 1000)} (${samples.size} samples). " +
+                    "Battery is the whole phone's drain while unplugged; data is this app only.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val now = System.currentTimeMillis()
+            Text("Last 24 hours", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+            UsageLog.describe(UsageLog.summarize(samples, now - 24 * 3600 * 1000L)).forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+            Text("Whole log", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+            UsageLog.describe(UsageLog.summarize(samples)).forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("SOL-Watch usage log", UsageLog.export(context)))
+                    copied = true
+                }) { Text(if (copied) "Copied" else "Copy log") }
+                TextButton(onClick = { UsageLog.clear(context); cleared++; copied = false }) { Text("Clear") }
+            }
+        }
     }
 }
 

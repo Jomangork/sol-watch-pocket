@@ -95,13 +95,14 @@ class BridgeService : Service() {
             watchNetwork()
         }
         if (updateChecker?.isAlive != true) {
-            // App updates: hourly on Wi-Fi, daily on mobile data, while SOL-Watch runs.
+            // App updates (hourly on Wi-Fi, daily on mobile data) and the usage log, while SOL-Watch runs.
             updateChecker = Thread({
                 try {
                     while (!Thread.currentThread().isInterrupted) {
                         val metered = metered()
                         if (AppUpdater.due(this, metered)) runCatching { AppUpdater.check(this) }
-                        Thread.sleep(10 * 60 * 1000L)
+                        runCatching { UsageLog.record(this, metered, _status.value.running) }  // temporary
+                        Thread.sleep(UsageLog.EVERY_MS)
                     }
                 } catch (_: InterruptedException) {
                 }
