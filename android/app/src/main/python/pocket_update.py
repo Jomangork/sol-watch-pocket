@@ -32,7 +32,10 @@ def version_of(source):
 
 
 def version_tuple(text):
-    return tuple(int(part) for part in text.split(".")) if text else (0,)
+    """(1, 7, 12) for "1.07.12"; (0,) for anything that isn't a version (None, "", "null")."""
+    if not text or not re.fullmatch(r"\d+(\.\d+)*", str(text)):
+        return (0,)
+    return tuple(int(part) for part in str(text).split("."))
 
 
 def _file_version(path):
@@ -49,13 +52,33 @@ def _bundled_spec(code_dir):
     return importlib.machinery.PathFinder.find_spec("sol_watch", [p for p in sys.path if p != skip])
 
 
+def version_in_code(code):
+    """VERSION from a compiled module: the constant stored into the name VERSION at top level."""
+    import dis
+    last = None
+    for instruction in dis.get_instructions(code):
+        if instruction.opname == "LOAD_CONST":
+            last = instruction.argval
+        elif instruction.opname in ("STORE_NAME", "STORE_GLOBAL") and instruction.argval == "VERSION":
+            return last if isinstance(last, str) and VERSION_RE.match(f'VERSION = "{last}"') else None
+    return None
+
+
 def _bundled_version(code_dir):
+    """The bundled bridge's VERSION. The app ships it compiled (.pyc), so the text often isn't there:
+    then the version is read from the compiled code, without running it."""
     spec = _bundled_spec(code_dir)
     if spec is None or spec.loader is None:
         return None
     try:
-        return version_of(spec.loader.get_data(spec.origin)[:20000].decode("utf-8", "replace"))
-    except Exception:  # an importer that can't hand out its source: treat the bundled copy as unknown
+        found = version_of(spec.loader.get_data(spec.origin)[:20000].decode("utf-8", "replace"))
+    except Exception:
+        found = None
+    if found:
+        return found
+    try:
+        return version_in_code(spec.loader.get_code(spec.name))
+    except Exception:  # an importer that can't hand out its code either: treat the bundled copy as unknown
         return None
 
 

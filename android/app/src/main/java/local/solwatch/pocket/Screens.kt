@@ -416,7 +416,7 @@ private fun BridgeUpdateCard(running: Boolean) {
     }
     LaunchedEffect(checking) {
         if (!checking) return@LaunchedEffect
-        val runningVersion = info?.optString("using").orEmpty()
+        val runningVersion = info?.takeUnless { it.isNull("using") }?.optString("using").orEmpty()
         val result = withContext(Dispatchers.IO) {
             runCatching {
                 val python = Python.getInstance()
@@ -435,7 +435,7 @@ private fun BridgeUpdateCard(running: Boolean) {
             Text("Bridge updates", fontWeight = FontWeight.SemiBold)
             info?.let {
                 Text(
-                    "Bridge v${it.optString("using")}, " +
+                    (if (it.isNull("using")) "Bridge version unknown, " else "Bridge v${it.optString("using")}, ") +
                         (if (it.optString("source") == "GitHub") "updated from GitHub" else "as shipped with the app") +
                         if (it.optBoolean("trial")) " · on trial: goes back if it fails to start" else "",
                     style = MaterialTheme.typography.bodySmall,
@@ -445,7 +445,7 @@ private fun BridgeUpdateCard(running: Boolean) {
                 Column(Modifier.weight(1f)) {
                     Text("Install updates automatically")
                     Text(
-                        "When the bridge's daily check finds a new version on GitHub, the app checks it fits and " +
+                        "When a new version is on GitHub (checked hourly on Wi-Fi, daily on mobile data), the app checks it fits and " +
                             "switches to it. If it fails to start, the app goes back.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

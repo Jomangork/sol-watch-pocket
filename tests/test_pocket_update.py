@@ -160,5 +160,35 @@ class RunnerUpdates(unittest.TestCase):
         self.assertIsNone(self.runner._update_wanted)
 
 
+class BundledVersion(unittest.TestCase):
+    """On the phone the bundled bridge is compiled (.pyc only), so its version comes from the code."""
+
+    def setUp(self):
+        self.source = (PYTHON_DIR / "sol_watch.py").read_text(encoding="utf-8")
+        self.expected = pocket_update.version_of(self.source)
+
+    def test_version_in_compiled_code(self):
+        self.assertEqual(pocket_update.version_in_code(compile(self.source, "sol_watch.py", "exec")), self.expected)
+
+    def test_sourceless_bundled_copy(self):
+        import py_compile
+        with tempfile.TemporaryDirectory() as folder:
+            py_compile.compile(str(PYTHON_DIR / "sol_watch.py"), cfile=str(Path(folder) / "sol_watch.pyc"))
+            saved = sys.path[:]
+            sys.path[:] = [folder]
+            try:
+                importlib.invalidate_caches()
+                self.assertEqual(pocket_update._bundled_version(None), self.expected)
+                self.assertEqual(json.loads(pocket_update.describe(str(Path(folder) / "code")))["using"], self.expected)
+            finally:
+                sys.path[:] = saved
+                importlib.invalidate_caches()
+
+    def test_not_a_version(self):
+        for text in (None, "", "null"):
+            self.assertEqual(pocket_update.version_tuple(text), (0,))
+        self.assertEqual(pocket_update.version_tuple("1.07.12"), (1, 7, 12))
+
+
 if __name__ == "__main__":
     unittest.main()
