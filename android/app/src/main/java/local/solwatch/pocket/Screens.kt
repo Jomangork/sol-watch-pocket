@@ -204,6 +204,7 @@ fun ChecksScreen(modifier: Modifier) {
                 }
             }
         }
+        item { FleetFlightsCard() }
         item {
             Text(
                 "Data figures assume every read finds something changed, measured on 13 Nov 2026. " +
@@ -212,6 +213,44 @@ fun ChecksScreen(modifier: Modifier) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/** Posts about our own fleets' flights: a bridge setting, so a change restarts the bridge. */
+@Composable
+private fun FleetFlightsCard() {
+    val context = LocalContext.current
+    var on by remember { mutableStateOf(Settings.fleetFlights(context)) }
+    var minutes by remember { mutableStateOf(Settings.fleetWarningMinutes(context)) }
+    fun applied() { if (BridgeService.status.value.running) BridgeService.restart(context) }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Our fleet flights", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "🧭 when a fleet leaves, ↪️ if it changes course, 🔔 a reminder before it lands, ⚓ when it lands. " +
+                            "Quiet notifications. Uses the \"Our battles & sieges\" check's reads, so that check must be on; " +
+                            "no extra data.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = on, onCheckedChange = { on = it; Settings.setFleetFlights(context, it); applied() })
+            }
+            if (on) {
+                Text("Reminder before landing", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (choice in listOf(0, 10, 30, 60)) {
+                        FilterChip(
+                            selected = minutes == choice,
+                            onClick = { minutes = choice; Settings.setFleetWarningMinutes(context, choice); applied() },
+                            label = { Text(if (choice == 0) "None" else "$choice min") },
+                        )
+                    }
+                }
+            }
         }
     }
 }

@@ -67,6 +67,16 @@ object Settings {
 
     fun setSoundAll(context: Context, on: Boolean) = prefs(context).edit().putBoolean("sound_all", on).apply()
 
+    // Posts about our own fleets' flights (bridge settings.ini [alerts]); read when the bridge starts.
+    fun fleetFlights(context: Context) = prefs(context).getBoolean("fleet_flights", false)
+
+    fun setFleetFlights(context: Context, on: Boolean) = prefs(context).edit().putBoolean("fleet_flights", on).apply()
+
+    fun fleetWarningMinutes(context: Context) = prefs(context).getInt("fleet_warning_minutes", 30)
+
+    fun setFleetWarningMinutes(context: Context, minutes: Int) =
+        prefs(context).edit().putInt("fleet_warning_minutes", minutes).apply()
+
     fun enabled(context: Context) = prefs(context).getBoolean(ENABLED, false)
 
     fun setEnabled(context: Context, on: Boolean) = prefs(context).edit().putBoolean(ENABLED, on).apply()

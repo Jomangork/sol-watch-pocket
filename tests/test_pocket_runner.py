@@ -113,6 +113,34 @@ class WithBridge(unittest.TestCase):
         title, body, _ = self.parts("x" * 200)
         self.assertEqual((title, body), ("", "x" * 200))
 
+    def test_label_titles_are_tidied(self):
+        stamp = "`14 Nov 2032, 06:22 AM`"
+        self.assertEqual(self.parts("🔬 **[RESEARCH ACTIVE]** **Ion drives** (pace: steady)"),
+                         ("🔬 Research active: Ion drives", "(pace: steady)", ""))
+        self.assertEqual(self.parts(f"🆘 **[ESCAPE CAPSULES / CAPTIVES]** 3 capsules near Ceres · {stamp}"),
+                         ("🆘 Escape capsules / captives", "3 capsules near Ceres", "14 Nov 2032, 06:22 AM"))
+        self.assertEqual(self.parts("🏛️ **[UEG PROJECT]** A new dome")[0], "🏛️ UEG project")
+
+    def test_fleet_flight_post(self):
+        line = ("🧭 **Our fleet left LEO for Pallas orbit:** 3× Corvette · `14 Nov 2032, 06:22 AM` | "
+                "Lands `1 Jan 2033, 05:47 PM` · 🕰️ <t:1793750000:t> (<t:1793750000:R>)")
+        title, body, when = self.parts(line)
+        self.assertEqual(title, "🧭 Our fleet left LEO for Pallas orbit")
+        self.assertTrue(body.startswith("3× Corvette | Lands 1 Jan 2033, 05:47 PM · 🕰️ "), body)
+        self.assertEqual(when, "14 Nov 2032, 06:22 AM")
+
+    def test_settings_carry_the_fleet_flight_choice(self):
+        self.assertIn("fleet_move_posts = no", pocket_runner.settings_ini())
+        ini = pocket_runner.settings_ini(True, 10)
+        self.assertIn("fleet_move_posts = yes", ini)
+        self.assertIn("fleet_arrival_warning_minutes = 10", ini)
+        runner = pocket_runner.Runner(self.folder.parent / "flights", "sol_x", FakeSender(), settings=ini)
+        sw = runner.prepare()
+        sw.load_settings(self.folder.parent / "flights" / "settings.ini")
+        self.assertTrue(sw.FLEET_MOVE_POSTS)  # the bridge itself reads the app's choice
+        self.assertEqual(sw.FLEET_ARRIVAL_WARNING_MINUTES, 10)
+        sw.FLEET_MOVE_POSTS, sw.FLEET_ARRIVAL_WARNING_MINUTES = False, 30  # the module is shared with other tests
+
     def test_post_moves_the_game_time_after_the_headline(self):
         self.sw.Discord(enabled=True).post("pocket://corp", "X", ["📭 `14 Nov 2032, 06:22 AM` **The research queue is empty.**"])
         text = self.sender.delivered[0][2]

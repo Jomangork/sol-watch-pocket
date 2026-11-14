@@ -133,6 +133,9 @@ class BridgeService : Service() {
                     Kwarg("code_dir", codeDir(this).absolutePath),
                     Kwarg("auto_update", Settings.autoUpdate(this)),
                     Kwarg("update_every", updateEvery(metered())),
+                    Kwarg("settings", python.getModule("pocket_runner").callAttr(
+                        "settings_ini", Settings.fleetFlights(this), Settings.fleetWarningMinutes(this),
+                    )),
                 )
                 runner = created
                 publish(_status.value.copy(running = true, message = "Starting the bridge…", error = "", metered = metered()))

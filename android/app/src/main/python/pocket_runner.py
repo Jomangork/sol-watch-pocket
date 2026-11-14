@@ -36,6 +36,15 @@ mode = full
 check_minutes = 60
 """
 
+
+
+def settings_ini(fleet_flights=False, fleet_warning_minutes=30):
+    """settings.ini with the app's own choices: posts about our fleets' flights (bridge 1.07.14+; an older
+    bridge ignores them) and how many minutes before landing to remind (0: no reminder)."""
+    return BASE_SETTINGS + (f"\n[alerts]\nfleet_move_posts = {'yes' if fleet_flights else 'no'}\n"
+                            f"fleet_arrival_warning_minutes = {max(0, min(1440, int(fleet_warning_minutes)))}\n")
+
+
 CHANNELS = ("corp", "general", "alliance")
 WEBHOOK_PREFIX = "pocket://"
 URGENT_MARKS = ("🚨", "🆘", "🔑")  # 🔑: without a working key the app watches nothing
@@ -132,8 +141,19 @@ def plain(module, text):
 GAME_STAMP_RE = re.compile(r"(?: · )?`([^`\n]*\d{4}[^`\n]*)` ?")
 # The emoji, then a **bold** headline ("🧪 **Research done: Ion drives** | next: …").
 HEADLINE_RE = re.compile(r"^((?:[^\w\s`*\[(]\S*\s+){0,3})\*\*(.+?)\*\*")
+LABEL_RE = re.compile(r"^\[([^\]\n]+)\]$")
+NEXT_BOLD_RE = re.compile(r"^\*\*(.+?)\*\*")
+ACRONYMS = {"UEG", "LEO", "GEO", "HQ", "NPC", "AI", "ID"}
 TITLE_MAX = 80
 TITLE_BREAKS = (". ", " | ", ": ", " — ")
+
+
+def tidy_label(label):
+    """'SIEGE CONTRACT AGAINST US' -> 'Siege contract against us' (known acronyms such as UEG stay)."""
+    words = [w if w in ACRONYMS else w.lower() for w in label.split(" ")]
+    if words and words[0] not in ACRONYMS:
+        words[0] = words[0][:1].upper() + words[0][1:]
+    return " ".join(words)
 
 
 def notification_parts(module, text):
@@ -151,6 +171,13 @@ def notification_parts(module, text):
     if headline:
         title = headline.group(1) + headline.group(2).rstrip().rstrip(":")
         rest = first[headline.end():].lstrip(" ·|:—-,")
+        label = LABEL_RE.match(headline.group(2).strip())
+        if label:  # "**[RESEARCH ACTIVE]** **Ion drives** …" -> "Research active: Ion drives"
+            title = headline.group(1) + tidy_label(label.group(1))
+            named = NEXT_BOLD_RE.match(rest)
+            if named:
+                title += ": " + named.group(1).rstrip().rstrip(":")
+                rest = rest[named.end():].lstrip(" ·|:—-,")
     elif len(plain(module, first)) <= TITLE_MAX:
         title, rest = first, ""
     else:
