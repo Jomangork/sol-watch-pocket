@@ -13,8 +13,8 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 
 /**
- * Turns alerts into notifications. 🚨 / 🚨⚔️ / 🆘 / 🔑 go to the loud Urgent channel, one
- * notification each; everything else is grouped per bridge channel, silent by default.
+ * Turns alerts into notifications, all in one bundle. 🚨 / 🚨⚔️ / 🆘 / 🔑 go to the loud Urgent channel;
+ * everything else to its bridge channel's (Corp, General, Alliance), silent by default.
  * "Sound for every alert" (Settings.soundAll) sends those to twin channels that make a sound,
  * because Android fixes a channel's importance when it is first made. Each channel's sound can
  * still be changed in Android's settings: the app never forces a notification silent.
@@ -34,6 +34,9 @@ object Notifier {
     // Chat makes a sound (unlike the other quiet channels). A new id, because Android keeps a
     // channel's importance from when it was first made: the old silent "chat" channel is removed.
     const val CHAT = "chat_messages"
+    // Every alert goes in one bundle (before 0.7.0: one per channel, whose summaries had the channels' hash codes).
+    private const val GROUP = "sol_alerts"
+    private const val SUMMARY_ID = 3
     // Seeded from the clock so a restarted app doesn't replace notifications still showing.
     private var nextId = (System.currentTimeMillis() / 1000 % 1_000_000).toInt() + 1000
 
@@ -61,6 +64,8 @@ object Notifier {
             )
         }
         manager.deleteNotificationChannel("chat")
+        // The per-channel bundle summaries from before 0.7.0.
+        (QUIET.map { it.first } + QUIET.map { soundId(it.first) } + CHAT).forEach { manager.cancel(it.hashCode()) }
         manager.createNotificationChannel(
             NotificationChannel(CHAT, "Chat", NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = "Global and alliance chat, when the Chat relay check is on"
@@ -78,43 +83,70 @@ object Notifier {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
-    fun show(context: Context, channel: String, header: String, plain: String, priority: String) {
+    /**
+     * One alert. The title is the alert's emoji and headline, the text is the rest of it (nothing twice),
+     * and the game time goes in the header next to the channel's name. All alerts share one bundle.
+     */
+    fun show(
+        context: Context, channel: String, header: String, priority: String, title: String, body: String, gameTime: String,
+    ) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) return
-        val lines = plain.trim().lines()
-        val title = lines.first().take(120)
         val androidChannel = when (priority) {
             "urgent" -> URGENT
             "chat" -> CHAT
             else -> (channel.takeIf { c -> QUIET.any { it.first == c } } ?: "corp")
                 .let { if (Settings.soundAll(context)) soundId(it) else it }
         }
+        val label = channelLabel(channel)
         val builder = NotificationCompat.Builder(context, androidChannel)
             .setSmallIcon(R.drawable.ic_notify)
-            .setContentTitle(title)
-            .setContentText(lines.drop(1).joinToString(" ").ifBlank { headerLabel(header) })
-            .setStyle(NotificationCompat.BigTextStyle().bigText(plain.trim()))
-            .setSubText(headerLabel(header))
+            .setContentTitle(title.ifBlank { label })
+            .setSubText(listOf(label, gameTime).filter { it.isNotBlank() }.joinToString(" · "))
             .setContentIntent(openApp(context))
             .setAutoCancel(true)
+            .setGroup(GROUP)
             .setColor(if (priority == "urgent") 0xFFE5484D.toInt() else accentArgb(context))
-        val manager = NotificationManagerCompat.from(context)
-        if (priority == "urgent") {
-            builder.setPriority(NotificationCompat.PRIORITY_HIGH).setCategory(NotificationCompat.CATEGORY_ALARM)
-            manager.notify(nextId++, builder.build())
-            return
+        if (body.isNotBlank()) {
+            builder.setContentText(body.lines().joinToString(" "))
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
         }
         // No setSilent here: the channel decides, so a sound chosen in Android's settings plays.
-        val quiet = QUIET.any { it.first == androidChannel }
-        builder.setPriority(if (quiet) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_DEFAULT)
-            .setGroup(androidChannel)
+        when {
+            priority == "urgent" -> builder.setPriority(NotificationCompat.PRIORITY_HIGH).setCategory(NotificationCompat.CATEGORY_ALARM)
+            QUIET.any { it.first == androidChannel } -> builder.setPriority(NotificationCompat.PRIORITY_LOW)
+            else -> builder.setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        }
+        val manager = NotificationManagerCompat.from(context)
         manager.notify(nextId++, builder.build())
-        manager.notify(
-            androidChannel.hashCode(),
-            NotificationCompat.Builder(context, androidChannel)
+        summarize(context, androidChannel, title.ifBlank { body.lineSequence().firstOrNull().orEmpty() })
+    }
+
+    /**
+     * The bundle's summary. Android files a bundle by its summary's channel, so the summary uses the most
+     * important channel among the alerts still showing: an urgent alert isn't filed with the silent ones.
+     * It never makes a sound itself (the alerts do).
+     */
+    private fun summarize(context: Context, latestChannel: String, latest: String) {
+        val showing = context.getSystemService(NotificationManager::class.java).activeNotifications
+            .filter { it.notification.group == GROUP && it.id != SUMMARY_ID }
+        // Android may not list the alert just posted yet, so it's counted in by hand.
+        val channels = showing.map { it.notification.channelId }.toSet() + latestChannel
+        val summaryChannel = when {
+            URGENT in channels -> URGENT
+            CHAT in channels -> CHAT
+            channels.any { it.endsWith("_sound") } -> channels.first { it.endsWith("_sound") }
+            else -> "corp"
+        }
+        val count = showing.size + if (showing.any { it.id == nextId - 1 }) 0 else 1
+        NotificationManagerCompat.from(context).notify(
+            SUMMARY_ID,
+            NotificationCompat.Builder(context, summaryChannel)
                 .setSmallIcon(R.drawable.ic_notify)
-                .setGroup(androidChannel)
+                .setContentTitle(if (count == 1) "1 alert" else "$count alerts")
+                .setContentText(latest)
+                .setGroup(GROUP)
                 .setGroupSummary(true)
                 .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)  // the alert sounds, not its summary
                 .setSilent(true)
@@ -141,6 +173,6 @@ object Notifier {
         )
     }
 
-    private fun headerLabel(header: String) =
-        header.lowercase().replaceFirstChar { it.uppercase() }.ifBlank { "SOL-Watch" }
+    private fun channelLabel(channel: String) =
+        QUIET.firstOrNull { it.first == channel }?.second ?: "SOL-Watch"
 }

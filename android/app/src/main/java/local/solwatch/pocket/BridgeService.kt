@@ -34,6 +34,7 @@ data class BridgeStatus(
     val metered: Boolean = false,
     val error: String = "",
     val keyRejected: Boolean = false,
+    val outageSince: Long = 0,  // ms; when the game's server stopped answering, 0 while it answers
 )
 
 /**
@@ -151,7 +152,10 @@ class BridgeService : Service() {
                     Python.getInstance().getModule("pocket_update").callAttr("roll_back", codeDir(this).absolutePath)?.toString()
                 }.getOrNull()
                 if (rolledBack != null && rolledBack != "None") {
-                    Sender(this).deliver("corp", "BRIDGE UPDATE", "🆕 $rolledBack", "🆕 $rolledBack", "urgent")
+                    Sender(this).deliver(
+                        "corp", "BRIDGE UPDATE", "🆕 $rolledBack", "🆕 $rolledBack", "urgent",
+                        "🆕 Bridge update rolled back", rolledBack, "",
+                    )
                     continue
                 }
             } finally {
@@ -213,13 +217,16 @@ class BridgeService : Service() {
 
     /** Called from Python: sender.deliver(...) for each alert, sender.status(json) every 15 s. */
     class Sender(private val context: Context) {
-        fun deliver(channel: String, header: String, text: String, plain: String, priority: String) {
+        fun deliver(
+            channel: String, header: String, text: String, plain: String, priority: String,
+            title: String, body: String, gameTime: String,
+        ) {
             AlertStore.get(context).add(channel, header, text, plain, priority)
             when {
                 text.startsWith("🔑") -> raiseWarning(context, "API key problem")
                 text.startsWith("🆕") -> raiseWarning(context, "Update available")
             }
-            Notifier.show(context, channel, header, plain, priority)
+            Notifier.show(context, channel, header, priority, title, body, gameTime)
             WidgetUpdater.request(context, now = priority == "urgent")
         }
 
@@ -244,6 +251,7 @@ class BridgeService : Service() {
                 polls = data.optInt("polls"),
                 failed = data.optInt("failed"),
                 lastPollAt = data.optLong("at") * 1000,
+                outageSince = data.optLong("outageSince") * 1000,
                 error = "",
             )
             publish(status)

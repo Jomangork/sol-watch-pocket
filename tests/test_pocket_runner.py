@@ -18,8 +18,8 @@ class FakeSender:
         self.statuses = []
         self.widgets = []
 
-    def deliver(self, channel, header, text, plain, priority):
-        self.delivered.append((channel, header, text, plain, priority))
+    def deliver(self, channel, header, text, plain, priority, title="", body="", game_time=""):
+        self.delivered.append((channel, header, text, plain, priority, title, body, game_time))
 
     def status(self, text):
         self.statuses.append(text)
@@ -82,12 +82,59 @@ class WithBridge(unittest.TestCase):
         discord.post("pocket://general", "HAZARDS",
                      ["🚨 **Strike** at Vesta <t:1794503987:R>", "🏗️ Upgrade complete", "🏗️ Upgrade complete"])
         self.assertEqual(len(self.sender.delivered), 2)  # the repeat is merged (×2) by the bridge
-        channel, header, text, plain, prio = self.sender.delivered[0]
+        channel, header, text, plain, prio = self.sender.delivered[0][:5]
         self.assertEqual((channel, header, prio), ("general", "HAZARDS", "urgent"))
         self.assertNotIn("**", plain)
         self.assertNotIn("<t:", plain)
         self.assertEqual(self.sender.delivered[1][4], "normal")
         self.assertIn("×2", self.sender.delivered[1][2])
+
+    def parts(self, text):
+        return pocket_runner.notification_parts(self.sw, text)
+
+    def test_title_is_the_headline_and_nothing_repeats(self):
+        stamp = "`14 Nov 2032, 06:22 AM`"
+        for line in (f"🧪 {stamp} **Research done: Ion drives** | next: Fusion",   # before bridge 1.07.13
+                     f"🧪 **Research done: Ion drives** · {stamp} | next: Fusion"):  # 1.07.13 and later
+            self.assertEqual(self.parts(line), ("🧪 Research done: Ion drives", "next: Fusion", "14 Nov 2032, 06:22 AM"))
+        title, body, when = self.parts(f"📉 **Copper running out at Tros:** {stamp}\n• Site 1\n• Site 2")
+        self.assertEqual((title, body, when), ("📉 Copper running out at Tros", "• Site 1\n• Site 2", "14 Nov 2032, 06:22 AM"))
+        title, body, _ = self.parts(f"🚨⚔️ **Fleet incoming to Mars** from Pirates · {stamp} · 🕰️ <t:1793750000:t> (<t:1793750000:R>)")
+        self.assertEqual(title, "🚨⚔️ Fleet incoming to Mars")
+        self.assertTrue(body.startswith("from Pirates · 🕰️ "))
+        self.assertNotIn("<t:", body)
+
+    def test_title_without_a_headline(self):
+        self.assertEqual(self.parts("🏗️ Upgrade complete"), ("🏗️ Upgrade complete", "", ""))
+        long = "📰 A very long news item about something that happened. " + "More words follow here. " * 5
+        title, body, _ = self.parts(long)
+        self.assertEqual(title, "📰 A very long news item about something that happened")
+        self.assertTrue(body.startswith("More words"))
+        title, body, _ = self.parts("x" * 200)
+        self.assertEqual((title, body), ("", "x" * 200))
+
+    def test_post_moves_the_game_time_after_the_headline(self):
+        self.sw.Discord(enabled=True).post("pocket://corp", "X", ["📭 `14 Nov 2032, 06:22 AM` **The research queue is empty.**"])
+        text = self.sender.delivered[0][2]
+        if hasattr(self.sw, "stamp_after_headline"):
+            self.assertTrue(text.startswith("📭 **The research queue is empty.**"), text)
+        self.assertEqual(self.sender.delivered[0][5], "📭 The research queue is empty.")
+
+    def test_an_outage_logs_one_line_then_one_when_it_ends(self):
+        written = []
+        self.sw._pocket_original_log = lambda message, detail=None: written.append(message)
+        self.runner._patch(self.sw)
+        for path in ("/me", "/chat", "/craft"):
+            self.sw.log(f"[API error] {path}: HTTP 530 (HTML error page)")
+        self.sw.log("[Watcher error] something else")
+        self.assertEqual(len(written), 2)
+        self.assertIn("repeats hidden", written[0])
+        self.assertTrue(self.runner.outage_since)
+        self.assertEqual(self.runner.outage_hidden, 2)
+        self.sw.read_ok()
+        self.assertIn("answers again", written[-1])
+        self.assertIn("2 more failed reads", written[-1])
+        self.assertEqual(self.runner.outage_since, 0)
 
     def test_disabled_sender_delivers_nothing(self):
         self.sw.Discord(enabled=False).post("pocket://corp", "X", ["🚨 nothing"])

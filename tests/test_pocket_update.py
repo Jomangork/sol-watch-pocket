@@ -91,7 +91,7 @@ class Sender:
     def __init__(self):
         self.delivered = []
 
-    def deliver(self, channel, header, text, plain, priority):
+    def deliver(self, channel, header, text, plain, priority, title="", body="", game_time=""):
         self.delivered.append(text)
 
 

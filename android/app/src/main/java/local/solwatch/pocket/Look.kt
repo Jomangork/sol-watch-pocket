@@ -132,6 +132,9 @@ fun raiseWarning(context: Context, reason: String) {
         .putLong(WARN_UNTIL, System.currentTimeMillis() + 30 * 60 * 1000L).putString(WARN_REASON, reason).apply()
 }
 
+/** A game-server outage shorter than this is a blip: the dot stays green. */
+private const val OUTAGE_SHOWN_MS = 2 * 60 * 1000L
+
 fun health(context: Context, status: BridgeStatus): Pair<Health, String> {
     val prefs = Settings.prefs(context)
     val now = System.currentTimeMillis()
@@ -140,6 +143,10 @@ fun health(context: Context, status: BridgeStatus): Pair<Health, String> {
         !Settings.enabled(context) -> Health.DOWN to "Stopped"
         status.error.isNotBlank() && !status.running -> Health.DOWN to status.message
         status.keyRejected || prefs.getBoolean(BridgeService.KEY_REJECTED, false) -> Health.DOWN to "API key rejected"
+        status.outageSince > 0 && now - status.outageSince >= OUTAGE_SHOWN_MS ->
+            Health.WARN to "Game server not answering since ${
+                java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(status.outageSince))
+            }"
         lastPoll > 0 && now - lastPoll > STALE_MS -> Health.WARN to "No check for ${(now - lastPoll) / 60000} min"
         prefs.getLong(WARN_UNTIL, 0) > now -> Health.WARN to (prefs.getString(WARN_REASON, null) ?: "Needs a look")
         lastPoll == 0L -> Health.WARN to "Starting…"

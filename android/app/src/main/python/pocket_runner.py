@@ -60,7 +60,7 @@ REQUIRED = (
     "VERSION", "HERE", "LOG_DIR", "POLL_COUNTS", "DISCORD_TIME", "readable_time",
     "Discord.post", "merge_repeats", "log", "heartbeat", "capture",
     "FieldTracker.observe", "FieldTracker.save", "Watcher.safe_poll", "apply_poll_intervals", "main",
-    "SolApi",
+    "SolApi", "read_ok", "OUTAGE", "PROBLEMS", "PROBLEM_TAGS",
 )
 
 
@@ -128,6 +128,38 @@ def plain(module, text):
     return re.sub(r"<(https?://[^>\s]+)>", r"\1", text)
 
 
+# A post's game time: `14 Nov 2032, 06:22 AM`, after the headline (bridge 1.07.13+) or right after the emoji.
+GAME_STAMP_RE = re.compile(r"(?: · )?`([^`\n]*\d{4}[^`\n]*)` ?")
+# The emoji, then a **bold** headline ("🧪 **Research done: Ion drives** | next: …").
+HEADLINE_RE = re.compile(r"^((?:[^\w\s`*\[(]\S*\s+){0,3})\*\*(.+?)\*\*")
+TITLE_MAX = 80
+TITLE_BREAKS = (". ", " | ", ": ", " — ")
+
+
+def notification_parts(module, text):
+    """(title, body, game time) for a notification, in plain text, saying nothing twice: the title is the
+    emoji and the bold headline, the body is the rest, and the game time goes to the notification's header.
+    Without a headline, a short first line is the title; a long one is split at its first break, or left
+    whole as the body with no title (the app then shows the channel's name)."""
+    first, _, more = text.partition("\n")
+    stamp = GAME_STAMP_RE.search(first)
+    game_time = plain(module, stamp.group(1)).strip() if stamp else ""
+    if stamp:
+        first = first[:stamp.start()] + " " + first[stamp.end():]
+    first = re.sub(r"[ \t]{2,}", " ", first).strip()
+    headline = HEADLINE_RE.match(first)
+    if headline:
+        title = headline.group(1) + headline.group(2).rstrip().rstrip(":")
+        rest = first[headline.end():].lstrip(" ·|:—-,")
+    elif len(plain(module, first)) <= TITLE_MAX:
+        title, rest = first, ""
+    else:
+        cut = min((i for i in (first.find(b) for b in TITLE_BREAKS) if 0 < i <= TITLE_MAX), default=-1)
+        title, rest = (first[:cut], first[cut:].lstrip(" .|:—")) if cut > 0 else ("", first)
+    body = "\n".join(part for part in (rest.strip(), more.strip()) if part)
+    return plain(module, title).strip(), plain(module, body).strip(), game_time
+
+
 class Runner:
     def __init__(self, folder, api_key, sender, checks=None, timezone=None, settings=BASE_SETTINGS,
                  code_dir=None, auto_update=False, update_every=86400):
@@ -152,6 +184,8 @@ class Runner:
         self.updated = False
         self._trial_done = False
         self.tapped = {}  # path -> last body the bridge read
+        self.outage_since = 0.0  # when the game's server stopped answering (0: it answers)
+        self.outage_hidden = 0
         self._me = None
 
     # ---- control, callable from the app's threads ----
@@ -219,7 +253,7 @@ class Runner:
     def _patch(self, sw):
         runner = self
         # Keep the bridge's own functions once, so preparing twice doesn't wrap the wrappers.
-        for name in ("heartbeat", "apply_poll_intervals"):
+        for name in ("heartbeat", "apply_poll_intervals", "log", "read_ok"):
             if not hasattr(sw, f"_pocket_original_{name}"):
                 setattr(sw, f"_pocket_original_{name}", getattr(sw, name))
         if not hasattr(sw.Watcher, "_pocket_original_safe_poll"):
@@ -233,8 +267,14 @@ class Runner:
         original_intervals = sw._pocket_original_apply_poll_intervals
         original_safe_poll = sw.Watcher._pocket_original_safe_poll
 
+        # Bridge 1.07.13+ moves each line's game time after its headline inside Discord.post, which the app
+        # replaces, so the app does the same here.
+        reorder = getattr(sw, "stamp_after_headline", None) or (lambda line: line)
+        original_log = sw._pocket_original_log
+        original_read_ok = sw._pocket_original_read_ok
+
         def post(discord, webhook_url, header, lines):
-            lines = sw.merge_repeats(lines)
+            lines = sw.merge_repeats([reorder(line) for line in lines])
             for line in lines:
                 sw.log(line)
             if not discord.enabled:
@@ -272,6 +312,32 @@ class Runner:
                 runner.tapped[path] = body
             return body
 
+        def log(message, detail=None):
+            # While the game's server is down, every read fails and logs a line: keep the first one, count
+            # the rest (still noted for the bridge's daily status), and say once when the server is back.
+            text = str(message)
+            if sw.OUTAGE.match(text):
+                if runner.outage_since:
+                    runner.outage_hidden += 1
+                    tag = sw.PROBLEM_TAGS.match(text)
+                    sw.PROBLEMS.append((time.time(), tag.group(1) if tag else "API error", text))
+                    return
+                runner.outage_since = time.time()
+                original_log(f"{text} (repeats hidden until the game's server answers)", detail)
+                return
+            original_log(message, detail)
+
+        def read_ok(*args, **kwargs):
+            original_read_ok(*args, **kwargs)
+            if runner.outage_since:
+                minutes = (time.time() - runner.outage_since) / 60
+                if runner.outage_hidden or minutes >= 1:  # not for one dropped connection whose retry worked
+                    original_log(f"[Pocket] The game's server answers again after {minutes:.0f} min "
+                                 f"({runner.outage_hidden} more failed reads not logged).")
+                runner.outage_since, runner.outage_hidden = 0.0, 0
+
+        sw.log = log
+        sw.read_ok = read_ok
         sw.SolApi.__init__ = api_init
         sw.SolApi.get = api_get
         sw.Discord.post = post
@@ -291,8 +357,10 @@ class Runner:
             self._update_wanted = found.group(1)
             line = f"🆕 SOL-Watch {found.group(1)} is available; the app is installing it now."
         line = app_wording(line)
+        title, body, game_time = notification_parts(self.module, line)
         try:
-            self.sender.deliver(channel, header or "", line, plain(self.module, line), priority(line))
+            self.sender.deliver(channel, header or "", line, plain(self.module, line), priority(line),
+                                title, body, game_time)
         except Exception as err:  # the app failing to show one alert mustn't stop the bridge
             self.module.log(f"[Pocket] Couldn't hand an alert to the app: {err!r}")
 
@@ -311,6 +379,7 @@ class Runner:
                 "at": int(time.time()),
                 # The bridge pauses every read while the game refuses the key; say so plainly.
                 "keyRejected": bool(self.api is not None and getattr(self.api, "rejected", False)),
+                "outageSince": int(self.outage_since),  # 0, or when the game's server stopped answering
             }))
         except Exception:
             pass

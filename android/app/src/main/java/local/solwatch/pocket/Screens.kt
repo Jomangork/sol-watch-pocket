@@ -308,6 +308,11 @@ fun StatusScreen(modifier: Modifier) {
                 if (status.version.isNotBlank()) Text("Bridge v${status.version} · ${status.polls} polls, ${status.failed} failed")
                 if (status.lastPollAt > 0) Text("Last check: ${shortTime(status.lastPollAt / 1000)}")
                 Text(if (status.metered) "On mobile data" else "On Wi-Fi or unmetered")
+                if (status.outageSince > 0) Text(
+                    "The game's server isn't answering (since ${shortTime(status.outageSince / 1000)}). " +
+                        "The bridge keeps trying; errors.log notes only the first failure.",
+                    color = MaterialTheme.colorScheme.error,
+                )
                 if (status.error.isNotBlank()) Text(status.error, color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.width(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
