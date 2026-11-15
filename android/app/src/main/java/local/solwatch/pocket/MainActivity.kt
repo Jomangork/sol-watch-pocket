@@ -15,7 +15,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -86,13 +90,17 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val TABS = listOf("🔔" to "Alerts", "📅" to "Calendar", "⏱️" to "Checks", "📡" to "Status")
+// Status, Checks and Alert types are chips inside Settings (since 0.8.5), so the bar stays short as the app grows.
+private val TABS = listOf("🔔" to "Alerts", "📅" to "Calendar", "⚙️" to "Settings")
 
 @Composable
 fun PocketScreens() {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(PocketNav.requested) {
-        val wanted = TABS.indexOfFirst { it.second.equals(PocketNav.requested, ignoreCase = true) }
+        val requested = PocketNav.requested
+        val chip = SETTINGS_CHIPS.firstOrNull { it.equals(requested, ignoreCase = true) }
+        if (chip != null) SettingsNav.chip = chip
+        val wanted = TABS.indexOfFirst { it.second.equals(if (chip != null) "Settings" else requested, ignoreCase = true) }
         if (wanted >= 0) tab = wanted
         PocketNav.requested = null
     }
@@ -127,8 +135,34 @@ fun PocketScreens() {
         when (tab) {
             0 -> AlertsScreen(modifier)
             1 -> CalendarScreen(modifier)
-            2 -> ChecksScreen(modifier)
-            else -> StatusScreen(modifier)
+            else -> SettingsScreen(modifier)
+        }
+    }
+}
+
+val SETTINGS_CHIPS = listOf("Status", "Checks", "Alert types")
+
+/** The Settings tab's chip, kept while switching tabs (and set when another part of the app asks for one). */
+object SettingsNav {
+    var chip by mutableStateOf(SETTINGS_CHIPS.first())
+}
+
+@Composable
+fun SettingsScreen(modifier: Modifier) {
+    Column(modifier.fillMaxSize()) {
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            for (chip in SETTINGS_CHIPS) {
+                FilterChip(selected = SettingsNav.chip == chip, onClick = { SettingsNav.chip = chip }, label = { Text(chip) })
+            }
+        }
+        val content = Modifier.weight(1f)
+        when (SettingsNav.chip) {
+            "Checks" -> ChecksScreen(content)
+            "Alert types" -> AlertTypesScreen(content)
+            else -> StatusScreen(content)
         }
     }
 }

@@ -61,6 +61,8 @@ fun kindColor(kind: String): Color = when (kind) {
 }
 
 private val FILTERS = listOf("all" to "All", "world" to "World", "ours" to "Ours", "threat" to "Threats")
+// The agenda also has Construction, which lists the constructions it otherwise groups by day.
+private val AGENDA_FILTERS = FILTERS + ("build" to "Construction")
 
 private fun startOfDay(ms: Long): Long = Calendar.getInstance().apply {
     timeInMillis = ms; set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
@@ -127,7 +129,13 @@ private fun TitleRow(month: Boolean, onChange: () -> Unit) {
 @Composable
 private fun AgendaView(modifier: Modifier, entries: List<CalEntry>, now: Long, onMonth: () -> Unit, onOpen: (String) -> Unit) {
     var filter by rememberSaveable { mutableStateOf("all") }
-    val shown = entries.filter { filter == "all" || it.kind == filter }
+    val shown = entries.filter {
+        when (filter) {
+            "all" -> true
+            "build" -> CalendarStore.isBuild(it)
+            else -> it.kind == filter
+        }
+    }
     val groups = shown.groupBy { e -> e.at?.let { dayLabel(it, now) } ?: "No date yet" }
     val next = CalendarStore.nextMajor(entries, now)
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -135,7 +143,7 @@ private fun AgendaView(modifier: Modifier, entries: List<CalEntry>, now: Long, o
         if (next != null) item { NextBigCard(next, now) { onOpen(next.id) } }
         item {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for ((id, label) in FILTERS) FilterChip(selected = filter == id, onClick = { filter = id }, label = { Text(label) })
+                for ((id, label) in AGENDA_FILTERS) FilterChip(selected = filter == id, onClick = { filter = id }, label = { Text(label) })
             }
         }
         if (entries.isEmpty()) item { EmptyCalendar() }
@@ -143,7 +151,10 @@ private fun AgendaView(modifier: Modifier, entries: List<CalEntry>, now: Long, o
             item(key = "day:$label") {
                 Text(label, style = MaterialTheme.typography.labelLarge, color = PocketColors.muted, modifier = Modifier.padding(top = 6.dp))
             }
-            items(items, key = { it.id }) { EntryRow(it, now) { onOpen(it.id) } }
+            val rows = if (filter == "build") items.map { listOf(it) } else CalendarStore.agendaRows(items)
+            items(rows, key = { it.first().id }) { row ->
+                if (row.size == 1) EntryRow(row[0], now) { onOpen(row[0].id) } else BuildsRow(row, now, onOpen)
+            }
         }
     }
 }
@@ -153,7 +164,7 @@ private fun EmptyCalendar() {
     val status by BridgeService.status.collectAsState()
     Text(
         if (status.running) "The calendar fills in within a minute or two of Sol Watch starting, from the checks' own reads."
-        else "Start Sol Watch on the Status tab: the calendar comes from its checks' reads.",
+        else "Start Sol Watch in Settings › Status: the calendar comes from its checks' reads.",
         style = MaterialTheme.typography.bodyMedium,
         color = PocketColors.muted,
         modifier = Modifier.padding(vertical = 12.dp),
@@ -201,6 +212,40 @@ private fun EntryRow(entry: CalEntry, now: Long, onClick: () -> Unit) {
         entry.at?.let {
             Text(if (past) "past" else CalendarStore.countdown(it, now), fontFamily = FontFamily.Monospace, fontSize = 13.sp,
                 color = if (past) PocketColors.muted else PocketColors.text)
+        }
+    }
+}
+
+/** Several constructions finishing on one day: one row that opens to list them. */
+@Composable
+private fun BuildsRow(builds: List<CalEntry>, now: Long, onOpen: (String) -> Unit) {
+    var open by rememberSaveable(builds.first().id) { mutableStateOf(false) }
+    val places = builds.map { it.sub }.filter { it.isNotBlank() }.distinct()
+    val times = builds.mapNotNull { it.at }
+    val past = times.isNotEmpty() && times.max() <= now
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(PocketColors.panel).clickable { open = !open }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(times.minOrNull()?.let { DateText.time(it) } ?: "—", Modifier.width(62.dp), color = PocketColors.muted, fontSize = 13.sp)
+            Box(Modifier.size(10.dp).clip(CircleShape).background(kindColor("ours").copy(alpha = if (past) 0.4f else 1f)))
+            Column(Modifier.weight(1f)) {
+                Text("🏗️ ${builds.size} constructions finish", fontSize = 15.sp, color = if (past) PocketColors.muted else PocketColors.text)
+                val where = if (places.size <= 2) places.joinToString(", ") else "${places.take(2).joinToString(", ")} and ${places.size - 2} more"
+                Text(listOf(where, if (open) "tap to close" else "tap to list").filter { it.isNotBlank() }.joinToString(" · "),
+                    fontSize = 12.sp, color = PocketColors.muted, maxLines = 2)
+            }
+            times.minOrNull()?.takeIf { it > now }?.let {
+                Text(CalendarStore.countdown(it, now), fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = PocketColors.text)
+            }
+        }
+        if (open) {
+            Column(Modifier.padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (entry in builds) EntryRow(entry, now) { onOpen(entry.id) }
+            }
         }
     }
 }

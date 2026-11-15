@@ -22,7 +22,10 @@ object Settings {
         val defaults = Catalog.preset(if (set == MOBILE) "saver" else "recommended")
         if (stored == null) return defaults
         val json = JSONObject(stored)
-        return defaults.mapValues { (id, seconds) -> if (json.has(id)) json.getInt(id) else seconds }
+        val mins = Catalog.checks.associate { it.id to it.min }
+        return defaults.mapValues { (id, seconds) ->
+            if (json.has(id)) snapInterval(json.getInt(id), mins[id] ?: 0, shorter = set != MOBILE) else seconds
+        }
     }
 
     fun setInterval(context: Context, set: String, checkId: String, seconds: Int) {

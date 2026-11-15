@@ -14,6 +14,7 @@ data class Check(
     val measured: Boolean,
     val feeds: String,
     val min: Int,
+    val minWhy: String = "",  // why min is longer than usual (a large download), shown under the check
 )
 
 /** Interval choices offered in the menu, in seconds; 0 = off. */
@@ -36,7 +37,19 @@ fun intervalLabel(seconds: Int): String = when {
     else -> "${seconds / 60} min"
 }
 
-fun choicesFor(check: Check): List<Int> = INTERVAL_CHOICES.filter { it == 0 || it >= check.min }
+/** Every check offers the same choices; those under its minimum are shown but can't be picked. */
+fun allowed(check: Check, seconds: Int) = seconds == 0 || seconds >= check.min
+
+/**
+ * A stored interval that isn't one of the menu's choices (presets before 0.8.5 had 20 s, 45 s and 3 min), moved
+ * to one that is: on Wi-Fi the next shorter choice, on mobile data the next longer one, within the check's minimum.
+ */
+fun snapInterval(seconds: Int, min: Int, shorter: Boolean): Int {
+    if (seconds <= 0 || seconds in INTERVAL_CHOICES) return seconds
+    val choices = INTERVAL_CHOICES.filter { it >= min }
+    return if (shorter) choices.lastOrNull { it < seconds } ?: choices.first()
+    else choices.firstOrNull { it > seconds } ?: choices.last()
+}
 
 fun readsPerMinute(checks: List<Check>, intervals: Map<String, Int>): Double =
     checks.sumOf { check ->

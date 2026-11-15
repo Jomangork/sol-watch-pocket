@@ -16,7 +16,7 @@ _ROWS = (
     ("FleetsWatcher", "Threats", "Our battles & sieges",
      "Our battles, duels and sieges", 60, 120, 60, 1, True, "Incoming fleets (where our fleets are)"),
     ("CraftWatcher", "Threats", "Launches & craft",
-     "Launches, arrivals, failures, escape capsules", 60, 120, 20, 1.5, True,
+     "Launches, arrivals, failures, escape capsules", 60, 120, 15, 1.5, True,
      "Blocked queues, flare safe mode, salvage"),
     ("DefenseWatcher", "Threats", "Hazards & debris",
      "Hazard forecasts and strikes, debris fields, asteroid threats", 120, 300, 60, 1.5, True,
@@ -26,7 +26,7 @@ _ROWS = (
     ("SegmentsWatcher", "Threats", "Segments & claims",
      "Tax rises, claim takeovers and losses", 600, 1800, 300, 2, True, ""),
     ("CompanyWatcher", "Company", "Company",
-     "Queues, blocked launches, crew supplies, construction", 120, 180, 60, 7.1, True,
+     "Queues, blocked launches, crew supplies, construction", 120, 300, 60, 7.1, True,
      "Incoming fleets (our places), standing advice, research queue"),
     ("IndustryWatcher", "Company", "Industry",
      "Stock running out, storage filling, production stalls, blocked vehicles", 300, 900, 300, 69, True,
@@ -34,9 +34,9 @@ _ROWS = (
     ("ResearchWatcher", "Company", "Research",
      "Research started, finished, 5-minute warning, queue empty", 120, 300, 60, 1, True, "Company (queue alerts)"),
     ("MiningWatcher", "Company", "Mining",
-     "Mining changes", 300, 900, 45, 0.8, True, ""),
+     "Mining changes", 300, 900, 30, 0.8, True, ""),
     ("OreBodiesWatcher", "Company", "Ore reserves",
-     "Ore running out", 300, 900, 45, 13, True, "Mining (asteroid names)"),
+     "Ore running out", 300, 900, 30, 13, True, "Mining (asteroid names)"),
     ("PocketWidget", "Company", "Widget data",
      "Money and income for the home-screen widget (one small read); research and arrivals come from the other checks",
      300, 900, 60, 1.5, False, "The widget's money and income"),
@@ -77,8 +77,14 @@ _ROWS = (
      "A new build of the game (only logged)", 86400, 86400, 300, 3, True, ""),
 )
 
-# Shortest interval the bridge allows for each (it refuses less on its own too).
+# Shortest interval allowed for each, and why: the menu shows the reason under the check, so nobody has to ask.
 MIN_SECONDS = {"DerelictWatcher": 600, "MarketWatcher": 600}
+MIN_WHY = {
+    "DerelictWatcher": "Every 10 minutes at most: each read downloads the game's whole craft map (about 57 KB), "
+                       "and the bridge itself refuses to read it more often.",
+    "MarketWatcher": "Every 10 minutes at most: each read downloads Earth's whole market (about 125 KB), so every "
+                     "15 seconds would use about 30 MB an hour.",
+}
 MIN_DEFAULT = 10
 MAX_SECONDS = 86400
 PRESETS = ("recommended", "saver", "fast")
@@ -86,7 +92,7 @@ PRESETS = ("recommended", "saver", "fast")
 CATALOG = tuple(
     {"id": cls, "group": group, "title": title, "alerts": alerts,
      "recommended": rec, "saver": saver, "fast": fast, "kib": kib, "measured": measured, "feeds": feeds,
-     "min": MIN_SECONDS.get(cls, MIN_DEFAULT)}
+     "min": MIN_SECONDS.get(cls, MIN_DEFAULT), "min_why": MIN_WHY.get(cls, "")}
     for cls, group, title, alerts, rec, saver, fast, kib, measured, feeds in _ROWS
 )
 IDS = tuple(row["id"] for row in CATALOG)

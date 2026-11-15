@@ -35,6 +35,7 @@ object Catalog {
                 measured = row.getBoolean("measured"),
                 feeds = row.getString("feeds"),
                 min = row.getInt("min"),
+                minWhy = row.optString("min_why"),
             )
         }
     }

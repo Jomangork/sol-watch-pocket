@@ -13,8 +13,8 @@ android {
         applicationId = "local.solwatch.pocket"
         minSdk = 29
         targetSdk = 36
-        versionCode = 22
-        versionName = "0.8.4"
+        versionCode = 23
+        versionName = "0.8.5"
         // No key is ever built in (since 0.4.0): the user pastes theirs on the Status screen.
         buildConfigField("String", "TEST_API_KEY", "\"\"")
         ndk {

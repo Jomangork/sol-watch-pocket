@@ -64,7 +64,7 @@ NEW_VERSION_RE = re.compile(r"^🆕 \*\*SOL-Watch (\d+\.\d+\.\d+) is available\*
 
 APP_WORDING = (
     (re.compile(r"put it in `\.env` as `SOL_BRIDGE_API_KEY` and restart the bridge"),
-     "paste it on Sol Watch's Status tab and tap Save key"),
+     "paste it in Sol Watch's Settings › Status and tap Save key"),
 )
 CHAT_MARKS = ("💬", "🤝")
 ALERT_KINDS_FILE = "alert_kinds.json"  # the bridge's alert kinds, for the app's Alert types page (bridge 1.08.00+)

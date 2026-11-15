@@ -55,6 +55,26 @@ object CalendarStore {
         }
     }
 
+    /** Construction finishing (the company's work bills). */
+    fun isBuild(entry: CalEntry) = entry.id.startsWith("build:")
+
+    /**
+     * One day's entries as agenda rows: one entry each, except that two or more constructions share one row,
+     * where the first of them was. On some days most of the calendar is construction.
+     */
+    fun agendaRows(day: List<CalEntry>): List<List<CalEntry>> {
+        val builds = day.filter(::isBuild)
+        if (builds.size < 2) return day.map { listOf(it) }
+        val first = builds.first()
+        return day.mapNotNull { entry ->
+            when {
+                entry === first -> builds
+                isBuild(entry) -> null
+                else -> listOf(entry)
+            }
+        }
+    }
+
     /** The next major entry still ahead, for the Calendar's top card and the widget. */
     fun nextMajor(entries: List<CalEntry>, now: Long): CalEntry? =
         entries.filter { it.major && it.at != null && it.at > now }.minByOrNull { it.at!! }

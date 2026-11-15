@@ -26,11 +26,20 @@ class EstimateTest {
         assertEquals(1.0, readsPerMinute(listOf(c), emptyMap()), 0.0)
     }
 
-    @Test fun choicesRespectMinimumButKeepOff() {
+    @Test fun everyCheckOffersTheSameChoicesButHonoursItsMinimum() {
         val c = check("DerelictWatcher", 0, 200.0, min = 600)
-        val choices = choicesFor(c)
-        assertTrue(0 in choices)
-        assertTrue(choices.filter { it != 0 }.all { it >= 600 })
+        assertTrue(allowed(c, 0))
+        assertEquals(listOf(0, 600, 900, 1800, 3600, 21600, 86400), INTERVAL_CHOICES.filter { allowed(c, it) })
+    }
+
+    @Test fun oddStoredIntervalsMoveToAMenuChoice() {
+        assertEquals(15, snapInterval(20, 10, shorter = true))    // Wi-Fi: the next shorter choice
+        assertEquals(30, snapInterval(45, 10, shorter = true))
+        assertEquals(120, snapInterval(180, 10, shorter = true))
+        assertEquals(300, snapInterval(180, 10, shorter = false))  // mobile data: the next longer one
+        assertEquals(600, snapInterval(450, 600, shorter = true))  // never under the check's minimum
+        assertEquals(300, snapInterval(300, 10, shorter = true))   // a menu choice stays
+        assertEquals(0, snapInterval(0, 10, shorter = true))
     }
 
     @Test fun labels() {

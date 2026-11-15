@@ -109,10 +109,10 @@ fun KindChoice(kind: String, priority: String, mode: String, onChange: (String) 
     }
 }
 
-/** The Alert types page, opened from the Checks tab: loud, quiet or off for each kind of alert. */
+/** The Alert types page (a chip on the Settings tab): loud, quiet or off for each kind of alert. */
 @Composable
-fun AlertTypesScreen(modifier: Modifier, onBack: () -> Unit) {
-    BackHandler(onBack = onBack)
+fun AlertTypesScreen(modifier: Modifier, onBack: (() -> Unit)? = null) {
+    if (onBack != null) BackHandler(onBack = onBack)
     val context = LocalContext.current
     val groups = remember { AlertKinds.load(context) }
     var modes by remember { mutableStateOf(Settings.kindModes(context)) }
@@ -126,10 +126,12 @@ fun AlertTypesScreen(modifier: Modifier, onBack: () -> Unit) {
         (query.isBlank() || kind.about.contains(query.trim(), ignoreCase = true))
 
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack) { Text("‹ Checks") }
-                Text("Alert types", style = MaterialTheme.typography.titleLarge)
+        if (onBack != null) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onBack) { Text("‹ Back") }
+                    Text("Alert types", style = MaterialTheme.typography.titleLarge)
+                }
             }
         }
         item {
@@ -143,7 +145,7 @@ fun AlertTypesScreen(modifier: Modifier, onBack: () -> Unit) {
         if (groups.isEmpty()) {
             item {
                 Text(
-                    "The list appears once Sol Watch has run with bridge 1.08.00 or newer. Start it on the Status tab.",
+                    "The list appears once Sol Watch has run with bridge 1.08.00 or newer. Start it in Settings › Status.",
                     Modifier.padding(vertical = 8.dp),
                 )
             }

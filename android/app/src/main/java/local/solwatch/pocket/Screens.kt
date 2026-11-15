@@ -48,6 +48,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -131,7 +133,7 @@ fun AlertsScreen(modifier: Modifier) {
         )
         if (alerts.isEmpty()) {
             Text(
-                if (query.isBlank() && filter == "all") "No alerts yet. Start Sol Watch on the Status tab; " +
+                if (query.isBlank() && filter == "all") "No alerts yet. Start Sol Watch in Settings › Status; " +
                     "new alerts appear here as they happen." else "No alerts match.",
                 Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -190,11 +192,6 @@ fun ChecksScreen(modifier: Modifier) {
     var set by rememberSaveable { mutableStateOf(Settings.WIFI) }
     val editing = if (separate) set else Settings.WIFI
     var intervals by remember(editing) { mutableStateOf(Settings.intervals(context, editing)) }
-    var types by rememberSaveable { mutableStateOf(false) }
-    if (types) {
-        AlertTypesScreen(modifier) { types = false }
-        return
-    }
 
     fun change(values: Map<String, Int>) {
         intervals = values
@@ -203,20 +200,6 @@ fun ChecksScreen(modifier: Modifier) {
 
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { ChecksSummary(checks, intervals) }
-        item {
-            Card(Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Alert types", fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "Loud, quiet or off for each kind of alert, such as research finished or a new contract.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    OutlinedButton(onClick = { types = true }) { Text("Choose") }
-                }
-            }
-        }
         item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -362,12 +345,19 @@ private fun CheckRow(check: Check, seconds: Int, onChange: (Int) -> Unit) {
                 Box {
                     TextButton(onClick = { open = true }) { Text(intervalLabel(seconds) + " ▾") }
                     DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                        for (choice in choicesFor(check)) {
+                        for (choice in INTERVAL_CHOICES) {
                             DropdownMenuItem(
                                 text = {
-                                    Text(intervalLabel(choice) + if (choice == check.recommended) "  · recommended" else "")
+                                    Text(
+                                        intervalLabel(choice) + when {
+                                            !allowed(check, choice) -> "  · too often for this check"
+                                            choice == check.recommended -> "  · recommended"
+                                            else -> ""
+                                        }
+                                    )
                                 },
                                 onClick = { open = false; onChange(choice) },
+                                enabled = allowed(check, choice),
                             )
                         }
                     }
@@ -380,6 +370,9 @@ private fun CheckRow(check: Check, seconds: Int, onChange: (Int) -> Unit) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (check.minWhy.isNotBlank()) {
+                Text(check.minWhy, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             if (seconds == 0 && check.feeds.isNotBlank()) {
                 Text(
                     "Off also leaves out what this check tells: ${check.feeds}.",
@@ -468,6 +461,7 @@ fun StatusScreen(modifier: Modifier) {
                 )
             }
         }
+        ReportCard()
         StorageCard(tick, running = status.running)
         UsageCard(tick)
         AppUpdateCard()
@@ -521,6 +515,58 @@ private fun UsageCard(tick: Int) {
                 }) { Text(if (copied) "Copied" else "Copy log") }
                 TextButton(onClick = { UsageLog.clear(context); cleared++; copied = false }) { Text("Clear") }
             }
+        }
+    }
+}
+
+/** One file with the app's logs and settings, to hand to Claude: share it or save it in Downloads. */
+@Composable
+private fun ReportCard() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var parts by rememberSaveable { mutableStateOf(Report.PARTS.filter { it.default }.map { it.id }.toSet()) }
+    var note by remember { mutableStateOf("") }
+    fun make(then: (String) -> Unit) = scope.launch {
+        note = "Making the report…"
+        val text = withContext(Dispatchers.IO) { runCatching { Report.build(context, parts) } }
+        text.onSuccess { note = "About ${it.length / 1024} KB"; then(it) }.onFailure { note = "Couldn't make the report: ${it.message}" }
+    }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Report for Claude", fontWeight = FontWeight.SemiBold)
+            Text(
+                "One file with the app's logs and settings, to hand over when something needs looking at. " +
+                    "Your API key is never included.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            for (part in Report.PARTS) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(part.label)
+                        Text(part.about, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(checked = part.id in parts, onCheckedChange = { on -> parts = if (on) parts + part.id else parts - part.id })
+                }
+            }
+            if ("alerts" in parts) {
+                Text(
+                    "Alert and chat text is your company's private information. Include it only when you want Claude " +
+                        "to look at particular alerts.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { make { Report.share(context, it) } }, enabled = parts.isNotEmpty()) { Text("Share report") }
+                OutlinedButton(onClick = {
+                    make { text ->
+                        note = runCatching { "Saved in Downloads: " + Report.save(context, text) }
+                            .getOrElse { "Couldn't save: ${it.message}" }
+                    }
+                }, enabled = parts.isNotEmpty()) { Text("Save to Downloads") }
+            }
+            if (note.isNotBlank()) Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

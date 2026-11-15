@@ -47,10 +47,19 @@ class PureFunctions(unittest.TestCase):
         self.assertEqual(pocket_runner.priority("🔑 **The game is rejecting our API key.**"), "urgent")
         self.assertEqual(pocket_runner.priority("🔑 The game accepts our API key again."), "normal")
 
+    def test_presets_only_use_the_menus_choices(self):
+        import pocket_checks
+        menu = {0, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 21600, 86400}  # INTERVAL_CHOICES in Estimate.kt
+        for row in pocket_checks.CATALOG:
+            for preset in pocket_checks.PRESETS:
+                self.assertIn(row[preset], menu, (row["id"], preset))
+            if row["min"] > pocket_checks.MIN_DEFAULT:
+                self.assertTrue(row["min_why"], row["id"])  # the menu says why it can't go faster
+
     def test_key_advice_is_reworded_for_the_app(self):
         line = ("🔑 Make a new key in the game, put it in `.env` as `SOL_BRIDGE_API_KEY` and restart the bridge.")
         self.assertEqual(pocket_runner.app_wording(line),
-                         "🔑 Make a new key in the game, paste it on Sol Watch's Status tab and tap Save key.")
+                         "🔑 Make a new key in the game, paste it in Sol Watch's Settings › Status and tap Save key.")
 
     def test_channel_of(self):
         self.assertEqual(pocket_runner.channel_of("pocket://alliance"), "alliance")

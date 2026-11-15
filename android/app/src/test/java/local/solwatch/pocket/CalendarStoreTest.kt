@@ -58,4 +58,15 @@ class CalendarStoreTest {
         assertEquals(listOf("Industry", "Widget data", "Reference tables"), use.map { it.name })
         assertEquals("Industry: 99% · 6 MB · 3 reads, 2048.0 KB each", UsageLog.describeDataUse(use)[0])
     }
+
+    @Test fun sameDayConstructionSharesOneRow() {
+        fun entry(id: String) = CalEntry(id, hour, 1000.0, "ours", id, "", false, "", "", emptyList())
+        val day = listOf(entry("research:x"), entry("build:a"), entry("deal:1"), entry("build:b"), entry("build:c"))
+        assertEquals(
+            listOf(listOf("research:x"), listOf("build:a", "build:b", "build:c"), listOf("deal:1")),
+            CalendarStore.agendaRows(day).map { row -> row.map { it.id } },
+        )
+        val one = listOf(entry("build:a"), entry("deal:1"))
+        assertEquals(listOf(listOf("build:a"), listOf("deal:1")), CalendarStore.agendaRows(one).map { row -> row.map { it.id } })
+    }
 }
