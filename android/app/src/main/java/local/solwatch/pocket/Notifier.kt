@@ -92,10 +92,11 @@ object Notifier {
 
     /**
      * One alert. The title is the alert's emoji and headline, the text is the rest of it (nothing twice),
-     * and the game time goes in the header next to the channel's name. All alerts share one bundle.
+     * and the game time goes in the header next to its Alerts tab (topic) or, failing that, its channel's name. All alerts share one bundle.
      */
     fun show(
         context: Context, channel: String, header: String, priority: String, title: String, body: String, gameTime: String,
+        topic: String = "",
     ) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
@@ -107,7 +108,7 @@ object Notifier {
             else -> (channel.takeIf { c -> QUIET.any { it.first == c } } ?: "corp")
                 .let { if (Settings.soundAll(context)) soundId(it) else it }
         }
-        val label = channelLabel(channel)
+        val label = topic.ifBlank { channelLabel(channel) }  // "Contracts · Alliance jobs", else the bridge's channel
         val builder = NotificationCompat.Builder(context, androidChannel)
             .setSmallIcon(R.drawable.ic_notify)
             .setContentTitle(title.ifBlank { label })

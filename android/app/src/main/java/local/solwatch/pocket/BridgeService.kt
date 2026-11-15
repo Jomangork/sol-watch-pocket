@@ -229,14 +229,17 @@ class BridgeService : Service() {
             // The user's choice for this kind of alert on the Alert types page, if any.
             val mode = Settings.kindMode(context, kind)
             val level = AlertKinds.level(priority, mode)
-            AlertStore.get(context).add(channel, header, text, plain, level, kind)
+            val topic = AlertTopics.of(kind, channel, priority, AlertKinds.headingOf(context, kind))
+            AlertStore.get(context).add(channel, header, text, plain, level, kind, topic)
             when {
                 text.startsWith("🔑") -> raiseWarning(context, "API key problem")
                 // Only while a newer bridge waits for the user: with automatic updates on, the app installs it.
                 text.startsWith("🆕") && isUpdateWaiting(text) && !Settings.autoUpdate(context) ->
                     raiseWarning(context, "Bridge update available")
             }
-            if (mode != AlertKinds.OFF) Notifier.show(context, channel, header, level, title, body, gameTime)
+            if (mode != AlertKinds.OFF) {
+                Notifier.show(context, channel, header, level, title, body, gameTime, AlertTopics.label(topic))
+            }
             WidgetUpdater.request(context, now = level == "urgent")
         }
 

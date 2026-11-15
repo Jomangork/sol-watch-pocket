@@ -84,10 +84,8 @@ private fun styled(text: String): AnnotatedString = buildAnnotatedString {
 
 // ---------------- Alerts ----------------
 
-private val FILTERS = listOf(
-    "all" to "All", "urgent" to "Urgent", "corp" to "Corp",
-    "general" to "General", "alliance" to "Alliance", "chat" to "Chat",
-)
+// All, Urgent, then the topic tabs (Company, Fleets, Contracts, Sol, Chat, Bridge), each with filters beneath it.
+private val FILTERS = listOf("all" to "All", "urgent" to "Urgent") + AlertTopics.TABS.map { it.name to it.name }
 
 @Composable
 fun AlertsScreen(modifier: Modifier) {
@@ -95,9 +93,11 @@ fun AlertsScreen(modifier: Modifier) {
     val store = remember { AlertStore.get(context) }
     val version by store.version.collectAsState()
     var filter by rememberSaveable { mutableStateOf("all") }
+    var sub by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
-    val alerts by produceState(emptyList<Alert>(), version, filter, query) {
-        value = withContext(Dispatchers.IO) { store.recent(filter, query) }
+    if (FILTERS.none { it.first == filter }) filter = "all"  // a chip from before 0.8.4 (Corp, General, …)
+    val alerts by produceState(emptyList<Alert>(), version, filter, sub, query) {
+        value = withContext(Dispatchers.IO) { store.recent(filter, query, sub = sub) }
     }
     val kinds = remember { AlertKinds.load(context).flatMap { it.kinds }.associateBy { it.id } }
     var modes by remember { mutableStateOf(Settings.kindModes(context)) }
@@ -107,7 +107,21 @@ fun AlertsScreen(modifier: Modifier) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             for ((id, label) in FILTERS) {
-                FilterChip(selected = filter == id, onClick = { filter = id }, label = { Text(label) })
+                FilterChip(selected = filter == id, onClick = { filter = id; sub = "" }, label = { Text(label) })
+            }
+        }
+        val subs = AlertTopics.subsOf(filter)
+        if (subs.isNotEmpty()) {
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                for (name in listOf("") + subs) {
+                    FilterChip(
+                        selected = sub == name, onClick = { sub = name },
+                        label = { Text(name.ifBlank { "All" }, style = MaterialTheme.typography.labelMedium) },
+                    )
+                }
             }
         }
         OutlinedTextField(
@@ -143,8 +157,8 @@ private fun AlertCard(alert: Alert, kind: AlertKind?, mode: String, onMode: (Str
     ) {
         Column(Modifier.padding(12.dp)) {
             Text(
-                "${shortTime(alert.at / 1000)} · ${alert.channel}" +
-                    alert.header.takeIf { it.isNotBlank() }?.let { " · ${it.lowercase()}" }.orEmpty(),
+                "${shortTime(alert.at / 1000)} · ${AlertTopics.label(alert.tab to alert.sub).ifBlank { alert.channel }}" +
+                    alert.header.takeIf { it.isNotBlank() && alert.tab.isBlank() }?.let { " · ${it.lowercase()}" }.orEmpty(),
                 style = MaterialTheme.typography.labelSmall,
                 color = if (urgent) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
             )

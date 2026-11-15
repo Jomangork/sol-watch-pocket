@@ -63,6 +63,11 @@ object AlertKinds {
     fun load(context: Context): List<KindGroup> =
         runCatching { parse(File(File(context.filesDir, "bridge"), "alert_kinds.json").readText()) }.getOrDefault(emptyList())
 
+    /** The kind's heading on the Alert types page, for a kind AlertTopics doesn't list yet (else null). */
+    fun headingOf(context: Context, kind: String): String? =
+        if (kind.isBlank() || AlertTopics.knows(kind)) null
+        else load(context).firstOrNull { group -> group.kinds.any { it.id == kind } }?.name
+
     /** The priority an alert is shown with: the bridge's, unless the user chose loud or quiet for its kind. */
     fun level(priority: String, mode: String): String = when (mode) {
         LOUD -> "urgent"

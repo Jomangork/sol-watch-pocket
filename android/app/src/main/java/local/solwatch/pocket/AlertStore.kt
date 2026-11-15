@@ -16,11 +16,13 @@ data class Alert(
     val plain: String,
     val priority: String,
     val kind: String = "",  // the bridge's alert kind (bridge 1.08.00+), or "" for an unlabelled alert
+    val tab: String = "",   // the Alerts tab's topic and the filter beneath it (AlertTopics)
+    val sub: String = "",
 )
 
 /** Every alert the bridge handed over, kept for Settings.historyDays (30 by default) in the app's private database. */
 class AlertStore private constructor(private val context: Context) :
-    SQLiteOpenHelper(context, "alerts.db", null, 2) {
+    SQLiteOpenHelper(context, "alerts.db", null, 3) {
 
     private val _version = MutableStateFlow(0)
     /** Bumped on every change, so screens know to reload. */
@@ -30,16 +32,32 @@ class AlertStore private constructor(private val context: Context) :
         db.execSQL(
             "CREATE TABLE alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, " +
                 "channel TEXT NOT NULL, header TEXT NOT NULL, text TEXT NOT NULL, plain TEXT NOT NULL, " +
-                "priority TEXT NOT NULL, kind TEXT NOT NULL DEFAULT '')"
+                "priority TEXT NOT NULL, kind TEXT NOT NULL DEFAULT '', tab TEXT NOT NULL DEFAULT '', " +
+                "sub TEXT NOT NULL DEFAULT '')"
         )
         db.execSQL("CREATE INDEX alerts_at ON alerts(at)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) db.execSQL("ALTER TABLE alerts ADD COLUMN kind TEXT NOT NULL DEFAULT ''")
+        if (oldVersion < 3) {  // 0.8.4: alerts already kept are sorted into the topic tabs too
+            db.execSQL("ALTER TABLE alerts ADD COLUMN tab TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE alerts ADD COLUMN sub TEXT NOT NULL DEFAULT ''")
+            val sorted = db.rawQuery("SELECT DISTINCT kind, channel, priority FROM alerts", null).use {
+                buildList { while (it.moveToNext()) add(Triple(it.getString(0), it.getString(1), it.getString(2))) }
+            }
+            for ((kind, channel, priority) in sorted) {
+                val (tab, sub) = AlertTopics.of(kind, channel, priority, AlertKinds.headingOf(context, kind))
+                db.update("alerts", ContentValues().apply { put("tab", tab); put("sub", sub) },
+                    "kind = ? AND channel = ? AND priority = ?", arrayOf(kind, channel, priority))
+            }
+        }
     }
 
-    fun add(channel: String, header: String, text: String, plain: String, priority: String, kind: String = ""): Long {
+    fun add(
+        channel: String, header: String, text: String, plain: String, priority: String, kind: String = "",
+        topic: Pair<String, String> = AlertTopics.of(kind, channel, priority),
+    ): Long {
         val now = System.currentTimeMillis()
         val id = writableDatabase.insert("alerts", null, ContentValues().apply {
             put("at", now)
@@ -49,20 +67,28 @@ class AlertStore private constructor(private val context: Context) :
             put("plain", plain)
             put("priority", priority)
             put("kind", kind)
+            put("tab", topic.first)
+            put("sub", topic.second)
         })
         if (id % 200 == 0L) prune()
         _version.value++
         return id
     }
 
-    /** Newest first. filter: "all", "urgent", "chat", or a channel name; query: words in the text. */
-    fun recent(filter: String, query: String, limit: Int = 300): List<Alert> {
+    /**
+     * Newest first. filter: "all", "urgent", "chat", or an Alerts tab (AlertTopics), with sub one of the filters
+     * beneath it ("" for all of them); query: words in the text.
+     */
+    fun recent(filter: String, query: String, limit: Int = 300, sub: String = ""): List<Alert> {
         val where = mutableListOf<String>()
         val args = mutableListOf<String>()
         when (filter) {
             "all" -> Unit
             "urgent", "chat" -> { where += "priority = ?"; args += filter }
-            else -> { where += "channel = ? AND priority = 'normal'"; args += filter }
+            else -> {
+                where += "tab = ?"; args += filter
+                if (sub.isNotBlank()) { where += "sub = ?"; args += sub }
+            }
         }
         if (query.isNotBlank()) { where += "plain LIKE ?"; args += "%${query.trim()}%" }
         val cursor = readableDatabase.query(
@@ -74,7 +100,8 @@ class AlertStore private constructor(private val context: Context) :
                 while (it.moveToNext()) add(
                     Alert(
                         it.getLong(0), it.getLong(1), it.getString(2), it.getString(3),
-                        it.getString(4), it.getString(5), it.getString(6), it.getString(7)
+                        it.getString(4), it.getString(5), it.getString(6), it.getString(7),
+                        it.getString(8), it.getString(9),
                     )
                 )
             }

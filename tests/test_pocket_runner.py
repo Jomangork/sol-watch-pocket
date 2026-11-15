@@ -1,6 +1,7 @@
 """Offline tests for pocket_runner (no network). Run: python3 -m unittest discover -s tests"""
 import json
 import os
+import re
 import sys
 import tempfile
 import types
@@ -110,6 +111,14 @@ class WithBridge(unittest.TestCase):
     def test_unlabelled_lines_fall_back_to_emoji(self):
         self.sw.Discord(enabled=True).post("pocket://corp", "", ["🚨 **Strike** at Vesta"])
         self.assertEqual((self.sender.kinds, self.sender.delivered[0][4]), ([""], "urgent"))
+
+    def test_every_alert_kind_has_an_alerts_tab(self):
+        topics = (Path(__file__).parent.parent / "android/app/src/main/java/local/solwatch/pocket/AlertTopics.kt")
+        tabs = topics.read_text(encoding="utf-8").split("val TABS", 1)[1].split("\n    )\n", 1)[0]
+        listed = set(re.findall(r'"(\w+)"', tabs))
+        groups = json.loads((self.folder / pocket_runner.ALERT_KINDS_FILE).read_text(encoding="utf-8"))
+        kinds = {k["id"] for g in groups for k in g["kinds"]}
+        self.assertEqual(kinds - listed, set())  # a new kind: add it to AlertTopics.kt (and pocket_kinds.py)
 
     def test_alert_kinds_file_for_the_app(self):
         groups = json.loads((self.folder / pocket_runner.ALERT_KINDS_FILE).read_text(encoding="utf-8"))
