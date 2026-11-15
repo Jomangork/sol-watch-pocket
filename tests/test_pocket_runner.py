@@ -174,7 +174,9 @@ class WithBridge(unittest.TestCase):
         self.assertTrue(sw.FLEET_MOVE_POSTS)  # the bridge itself reads the app's choice
         self.assertTrue(sw.ELEVATOR_TRIP_POSTS)
         self.assertEqual(sw.FLEET_ARRIVAL_WARNING_MINUTES, 10)
+        self.assertTrue(sw.GLOBAL_CHAT_POSTS)  # 1.09.00 turns global chat off for Discord; the phone keeps it
         sw.FLEET_MOVE_POSTS, sw.ELEVATOR_TRIP_POSTS, sw.FLEET_ARRIVAL_WARNING_MINUTES = False, False, 30  # the module is shared with other tests
+        sw.GLOBAL_CHAT_POSTS = False
 
     def test_post_moves_the_game_time_after_the_headline(self):
         self.sw.Discord(enabled=True).post("pocket://corp", "X", ["📭 `14 Nov 2032, 06:22 AM` **The research queue is empty.**"])

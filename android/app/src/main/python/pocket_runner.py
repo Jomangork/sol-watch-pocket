@@ -45,10 +45,12 @@ check_minutes = 60
 def settings_ini(fleet_flights=False, fleet_warning_minutes=30, elevator_trips=False):
     """settings.ini with the app's own choices: posts about our fleets' flights (bridge 1.07.14+) and our space
     elevator bookings (1.07.15+; an older bridge ignores both), and how many minutes before they land or arrive
-    to remind (0: no reminder)."""
+    to remind (0: no reminder). Global chat is always relayed on the phone: bridge 1.09.00+ turns it off by default
+    for Discord, and the Chat check on the Checks tab decides whether chat is read at all."""
     return BASE_SETTINGS + (f"\n[alerts]\nfleet_move_posts = {'yes' if fleet_flights else 'no'}\n"
                             f"elevator_trip_posts = {'yes' if elevator_trips else 'no'}\n"
-                            f"fleet_arrival_warning_minutes = {max(0, min(1440, int(fleet_warning_minutes)))}\n")
+                            f"fleet_arrival_warning_minutes = {max(0, min(1440, int(fleet_warning_minutes)))}\n"
+                            "global_chat_posts = yes\n")
 
 
 CHANNELS = ("corp", "general", "alliance")
