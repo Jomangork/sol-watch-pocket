@@ -17,8 +17,8 @@ data class Alert(
     val priority: String,
 )
 
-/** Every alert the bridge handed over, kept for 30 days in the app's private database. */
-class AlertStore private constructor(context: Context) :
+/** Every alert the bridge handed over, kept for Settings.historyDays (30 by default) in the app's private database. */
+class AlertStore private constructor(private val context: Context) :
     SQLiteOpenHelper(context, "alerts.db", null, 1) {
 
     private val _version = MutableStateFlow(0)
@@ -46,7 +46,7 @@ class AlertStore private constructor(context: Context) :
             put("plain", plain)
             put("priority", priority)
         })
-        if (id % 200 == 0L) writableDatabase.delete("alerts", "at < ?", arrayOf((now - KEEP_MS).toString()))
+        if (id % 200 == 0L) prune()
         _version.value++
         return id
     }
@@ -85,10 +85,16 @@ class AlertStore private constructor(context: Context) :
             .use { if (it.moveToFirst()) it.getInt(0) else 0 }
     }
 
+    /** Drops alerts older than the history length the user picked. */
+    fun prune() {
+        val keepMs = Settings.historyDays(context) * 24L * 3600 * 1000
+        writableDatabase.delete("alerts", "at < ?", arrayOf((System.currentTimeMillis() - keepMs).toString()))
+        _version.value++
+    }
+
     fun latest(priority: String): Alert? = recent(priority, "", limit = 1).firstOrNull()
 
     companion object {
-        private const val KEEP_MS = 30L * 24 * 3600 * 1000
         @Volatile private var instance: AlertStore? = null
         fun get(context: Context): AlertStore =
             instance ?: synchronized(this) { instance ?: AlertStore(context.applicationContext).also { instance = it } }

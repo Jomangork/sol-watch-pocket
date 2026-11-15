@@ -11,6 +11,7 @@ The bridge is not edited. This module hooks into it from outside:
 """
 import importlib
 import json
+import logging
 import os
 import re
 import sys
@@ -18,12 +19,14 @@ import threading
 import time
 from pathlib import Path
 
+import pocket_calendar
 import pocket_checks
 import pocket_glance
 import pocket_update
 
-# Bridge reads the widget summary reuses instead of reading again.
-TAPPED_PATHS = ("/research", "/craft", "/clock", "/reference/techs", "/reference/places", "/reference/bodies")
+# Bridge reads the widget summary and the calendar reuse instead of reading again.
+TAPPED_PATHS = tuple(dict.fromkeys(("/research", "/craft", "/clock", "/reference/techs", "/reference/places",
+                                    "/reference/bodies") + pocket_calendar.PATHS))
 
 # Written as settings.ini. The intervals themselves come from the user's checks (applied over
 # these at startup and live); derelicts are "on" here only so the bridge creates that watcher,
@@ -62,6 +65,12 @@ APP_WORDING = (
 )
 CHAT_MARKS = ("💬", "🤝")
 STATUS_EVERY_SECONDS = 15
+CALENDAR_EVERY_SECONDS = 60  # the app also checks calendar reminders each time
+DATA_USE_FILE = "data_use.json"  # bytes each API path downloaded, kept across restarts (temporary measuring aid)
+DATA_USE_SAVE_SECONDS = 300
+# The bridge's own log sizes: (bridge.log MB, old copies, errors.log MB, old copies). The app's Storage card
+# picks others; the wrapper then sets up the bridge's logs itself.
+BRIDGE_LOG_SIZES = (5, 5, 2, 3)
 FIRST_WIDGET_READ_SECONDS = 20  # let the bridge's own startup reads go first
 FIRST_UPDATE_CHECK_SECONDS = 120
 
@@ -191,7 +200,7 @@ def notification_parts(module, text):
 
 class Runner:
     def __init__(self, folder, api_key, sender, checks=None, timezone=None, settings=BASE_SETTINGS,
-                 code_dir=None, auto_update=False, update_every=86400):
+                 code_dir=None, auto_update=False, update_every=86400, log_sizes=None):
         self.folder = Path(folder)
         self.api_key = api_key
         self.sender = sender
@@ -216,6 +225,10 @@ class Runner:
         self.outage_since = 0.0  # when the game's server stopped answering (0: it answers)
         self.outage_hidden = 0
         self._me = None
+        self._calendar_due = time.monotonic() + FIRST_WIDGET_READ_SECONDS
+        self.log_sizes = tuple(int(n) for n in log_sizes) if log_sizes else BRIDGE_LOG_SIZES
+        self.data_use = {}  # path -> [bytes, reads] since the last save
+        self._data_use_due = time.monotonic() + DATA_USE_SAVE_SECONDS
 
     # ---- control, callable from the app's threads ----
 
@@ -317,6 +330,8 @@ class Runner:
             original_heartbeat()
             runner._status()
             runner._widget()
+            runner._calendar()
+            runner.save_data_use()
             runner._maybe_update()
 
         def apply_poll_intervals():
@@ -334,6 +349,33 @@ class Runner:
         def api_init(api, *args, **kwargs):
             original_api_init(api, *args, **kwargs)
             runner.api = api  # so the widget feed reads through the bridge's own client (spacing, ETags, key checks)
+            session_send = api.session.send
+
+            def send(request, **send_kwargs):  # count what each read costs (temporary measuring aid)
+                response = session_send(request, **send_kwargs)
+                try:
+                    runner._count(request, response)
+                except Exception:
+                    pass
+                return response
+            api.session.send = send
+
+        def setup_logs():
+            # The bridge's own setup, with the sizes the app's Storage card picked.
+            log_mb, log_copies, err_mb, err_copies = runner.log_sizes
+            sw.LOG_DIR.mkdir(exist_ok=True)
+            formatter = logging.Formatter("%(asctime)s %(message)s", "%Y-%m-%d %H:%M:%S")
+            for name, level, size_mb, copies in (("bridge.log", logging.INFO, log_mb, log_copies),
+                                                 ("errors.log", logging.WARNING, err_mb, err_copies)):
+                for old in sw.LOG_DIR.glob(name + ".*"):  # copies beyond the new count would never be replaced
+                    if old.suffix[1:].isdigit() and int(old.suffix[1:]) > copies:
+                        old.unlink(missing_ok=True)
+                handler = sw.RotatingFileHandler(sw.LOG_DIR / name, maxBytes=size_mb * 1024 * 1024, backupCount=copies,
+                                                 encoding="utf-8")
+                handler.setLevel(level)
+                handler.setFormatter(formatter)
+                sw.LOG.addHandler(handler)
+            sw.LOG.setLevel(logging.INFO)
 
         def api_get(api, path, *args, **kwargs):
             body = original_api_get(api, path, *args, **kwargs)
@@ -373,6 +415,8 @@ class Runner:
         sw.heartbeat = heartbeat
         sw.apply_poll_intervals = apply_poll_intervals
         sw.Watcher.safe_poll = safe_poll
+        if hasattr(sw, "setup_logs") and hasattr(sw, "RotatingFileHandler"):
+            sw.setup_logs = setup_logs
         sw.capture = lambda name, item: None
         sw.FieldTracker.observe = lambda tracker, endpoint, body: None
         sw.FieldTracker.save = lambda tracker: None
@@ -480,6 +524,64 @@ class Runner:
         finally:
             self._in_feed = False
 
+    def _count(self, request, response):
+        """Bytes one read cost: the compressed body as it came over the network, plus headers both ways."""
+        raw = getattr(response, "raw", None)
+        body = raw.tell() if raw is not None and hasattr(raw, "tell") else len(response.content or b"")
+        headers = sum(len(k) + len(v) + 4 for k, v in response.headers.items())
+        headers += sum(len(k) + len(v) + 4 for k, v in request.headers.items()) + len(request.url) + 40
+        url = request.url.split("?", 1)[0]
+        base = getattr(self.module, "API_BASE", "")
+        path = url[len(base):] if base and url.startswith(base) else url
+        entry = self.data_use.setdefault(path, [0, 0])
+        entry[0] += body + headers
+        entry[1] += 1
+
+    def save_data_use(self, force=False):
+        """Adds the counts since the last save to data_use.json: {"since": unix s, "paths": {path: [bytes, reads]}}."""
+        now = time.monotonic()
+        if not force and now < self._data_use_due:
+            return
+        self._data_use_due = now + DATA_USE_SAVE_SECONDS
+        counts, self.data_use = self.data_use, {}
+        if not counts:
+            return
+        file = self.folder / DATA_USE_FILE
+        try:
+            saved = json.loads(file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            saved = {}
+        paths = saved.get("paths") if isinstance(saved.get("paths"), dict) else {}
+        for path, (size, reads) in counts.items():
+            old = paths.get(path) or [0, 0]
+            paths[path] = [old[0] + size, old[1] + reads]
+        file.write_text(json.dumps({"since": saved.get("since") or int(time.time()), "paths": paths,
+                                    "names": self._path_names()}), encoding="utf-8")
+
+    def _path_names(self):
+        """{API path: the checks that read it} from the Checks menu, for the usage log's per-check figures."""
+        names = {"/clock": "Game clock (the bridge's own)", "/reference": "Reference tables (the bridge's own)"}
+        for row in pocket_checks.CATALOG:
+            path = pocket_checks.POCKET_FEEDS.get(row["id"]) or getattr(getattr(self.module, row["id"], None), "path", None)
+            if isinstance(path, str) and path:
+                base = getattr(self.module, "API_BASE", "")
+                path = path[len(base):] if base and path.startswith(base) else path
+                names[path] = f"{names[path]} + {row['title']}" if path in names else row["title"]
+        return names
+
+    def _calendar(self):
+        """Every CALENDAR_EVERY_SECONDS: the Calendar tab's entries, from replies the bridge already read."""
+        now = time.monotonic()
+        if now < self._calendar_due or not hasattr(self.sender, "calendar"):
+            return
+        self._calendar_due = now + CALENDAR_EVERY_SECONDS
+        try:
+            entries = pocket_calendar.build(dict(self.tapped, **{"/me": self._me}), int(time.time() * 1000))
+            if entries or self.tapped.get("/clock"):
+                self.sender.calendar(json.dumps(entries))
+        except Exception as err:  # the calendar must never stop the bridge
+            self.module.log(f"[Pocket] Couldn't build the calendar: {err!r}")
+
     def run(self):
         """Run the bridge until stop() is called. Returns "updated" after installing a new bridge
         (the caller starts the next run at once), else "stopped". Other errors propagate.
@@ -514,6 +616,10 @@ class Runner:
         except PocketStop:
             sw.log("[Pocket] Stopped.")
         finally:
+            try:
+                self.save_data_use(force=True)
+            except Exception:
+                pass
             # Let a later run in the same process take the lock and log files again.
             handle = getattr(sw, "_lock_handle", None)
             if handle:

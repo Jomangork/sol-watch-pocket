@@ -7,6 +7,12 @@ import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings as AndroidSettings
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -413,6 +419,7 @@ fun StatusScreen(modifier: Modifier) {
                 )
             }
         }
+        StorageCard(tick, running = status.running)
         UsageCard(tick)
         AppUpdateCard()
         BridgeUpdateCard(running = status.running)
@@ -448,6 +455,15 @@ private fun UsageCard(tick: Int) {
             UsageLog.describe(UsageLog.summarize(samples, now - 24 * 3600 * 1000L)).forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
             Text("Whole log", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
             UsageLog.describe(UsageLog.summarize(samples)).forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+            val use = remember(tick, cleared) { UsageLog.dataUse(context) }
+            Text("Data per check", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+            if (use == null || use.second.isEmpty()) {
+                Text("Counted from now on; the first figures come within 5 minutes.", style = MaterialTheme.typography.bodySmall)
+            } else {
+                Text("Since ${shortTime(use.first / 1000)}, biggest first:", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                UsageLog.describeDataUse(use.second, top = 8).forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
                     val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
@@ -455,6 +471,79 @@ private fun UsageCard(tick: Int) {
                     copied = true
                 }) { Text(if (copied) "Copied" else "Copy log") }
                 TextButton(onClick = { UsageLog.clear(context); cleared++; copied = false }) { Text("Clear") }
+            }
+        }
+    }
+}
+
+/** Space the app uses, the bridge's log sizes and how long alert history is kept. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun StorageCard(tick: Int, running: Boolean) {
+    val context = LocalContext.current
+    var sizes by remember { mutableStateOf(Settings.logSizes(context)) }
+    var days by remember { mutableStateOf(Settings.historyDays(context)) }
+    var changed by remember { mutableStateOf(0) }
+    val used by produceState(Triple(0L, 0L, 0L), tick, changed) {
+        value = withContext(Dispatchers.IO) {
+            val logs = File(File(context.filesDir, "bridge"), "logs").listFiles().orEmpty()
+            fun sum(prefix: String) = logs.filter { it.name.startsWith(prefix) }.sumOf { it.length() }
+            val db = context.getDatabasePath("alerts.db")
+            val history = listOf(db, File(db.path + "-wal"), File(db.path + "-journal")).sumOf { it.length() }
+            Triple(sum("bridge.log"), sum("errors.log"), history)
+        }
+    }
+    fun mb(bytes: Long) = "%.1f MB".format(bytes / 1024.0 / 1024.0)
+    fun save(new: List<Int>) {
+        sizes = new
+        Settings.setLogSizes(context, new)
+        if (running) BridgeService.restart(context)
+    }
+    val max = sizes[0] * (sizes[1] + 1) + sizes[2] * (sizes[3] + 1)
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Storage", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text("Using ${mb(used.first + used.second + used.third)}", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            val total = maxOf(max * 1024L * 1024L + used.third, used.first + used.second + used.third, 1L).toFloat()
+            Row(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)).background(PocketColors.line)) {
+                for ((bytes, color) in listOf(used.first to MaterialTheme.colorScheme.primary,
+                    used.second to Color(0xFFF06A8A), used.third to Color(0xFF4FC3F7))) {
+                    if (bytes > 0) Box(Modifier.fillMaxHeight().weight(maxOf(bytes / total, 0.005f)).background(color))
+                }
+                val rest = 1f - (used.first + used.second + used.third) / total
+                if (rest > 0.001f) Spacer(Modifier.weight(rest))
+            }
+            Text("Bridge log ${mb(used.first)} · error log ${mb(used.second)} · alert history ${mb(used.third)}",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            @Composable
+            fun Choice(label: String, options: List<Int>, selected: Int, text: (Int) -> String, pick: (Int) -> Unit) {
+                Text(label, style = MaterialTheme.typography.labelMedium)
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    options.forEach { FilterChip(selected = selected == it, onClick = { pick(it) }, label = { Text(text(it)) }) }
+                }
+            }
+            val mbText = { n: Int -> "$n MB" }
+            val copiesText = { n: Int -> if (n == 1) "1 old copy" else "$n old copies" }
+            Choice("Bridge log: size of each file", listOf(1, 2, 5), sizes[0], mbText) { save(sizes.toMutableList().also { l -> l[0] = it }) }
+            Choice("Bridge log: old files kept", listOf(1, 3, 5), sizes[1], copiesText) { save(sizes.toMutableList().also { l -> l[1] = it }) }
+            Choice("Error log: size of each file", listOf(1, 2), sizes[2], mbText) { save(sizes.toMutableList().also { l -> l[2] = it }) }
+            Choice("Error log: old files kept", listOf(1, 3), sizes[3], copiesText) { save(sizes.toMutableList().also { l -> l[3] = it }) }
+            Choice("Alert history", listOf(7, 14, 30, 90), days, { "$it days" }) {
+                days = it
+                Settings.setHistoryDays(context, it)
+                AlertStore.get(context).prune()
+                changed++
+            }
+            Text(
+                "Logs can grow to $max MB. Each log starts a new file when it's full and keeps the last few old ones; " +
+                    "the oldest goes first. A change restarts SOL-Watch.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (sizes != Settings.PHONE_LOG_SIZES) {
+                OutlinedButton(onClick = { save(Settings.PHONE_LOG_SIZES) }) { Text("Use phone sizes (logs up to 10 MB)") }
             }
         }
     }

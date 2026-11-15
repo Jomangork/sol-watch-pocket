@@ -17,6 +17,7 @@ class FakeSender:
         self.delivered = []
         self.statuses = []
         self.widgets = []
+        self.calendars = []
 
     def deliver(self, channel, header, text, plain, priority, title="", body="", game_time=""):
         self.delivered.append((channel, header, text, plain, priority, title, body, game_time))
@@ -26,6 +27,9 @@ class FakeSender:
 
     def widget(self, text):
         self.widgets.append(text)
+
+    def calendar(self, text):
+        self.calendars.append(text)
 
 
 class PureFunctions(unittest.TestCase):
@@ -268,6 +272,53 @@ class WithBridge(unittest.TestCase):
         finally:
             self.sw.SolApi._pocket_original_get = original
             self.runner._patch(self.sw)
+
+    def test_calendar_feed_uses_tapped_replies(self):
+        import json
+        self.runner.tapped["/clock"] = {"clock": {"epochRealMs": 0, "epochGameDay": 0, "timeScale": 24}}
+        self.runner.tapped["/industry"] = {"power": {"rulesDay": 10 ** 9}}
+        self.runner._calendar_due = 0
+        self.sw.heartbeat()
+        self.assertEqual([e["id"] for e in json.loads(self.sender.calendars[0])], ["power_rules"])
+        self.sw.heartbeat()  # once a minute, not every heartbeat
+        self.assertEqual(len(self.sender.calendars), 1)
+
+    def test_log_sizes_from_the_app(self):
+        import logging
+        runner = pocket_runner.Runner(self.folder.parent / "logs", "sol_x", FakeSender(), log_sizes=(2, 3, 1, 1))
+        sw = runner.prepare()
+        sw.LOG_DIR.mkdir(parents=True)
+        for n in (1, 4, 5):
+            (sw.LOG_DIR / f"bridge.log.{n}").write_text("old")
+        sw.setup_logs()
+        try:
+            sizes = {Path(h.baseFilename).name: (h.maxBytes, h.backupCount) for h in sw.LOG.handlers
+                     if isinstance(h, logging.handlers.RotatingFileHandler)}
+            self.assertEqual(sizes, {"bridge.log": (2 * 1024 * 1024, 3), "errors.log": (1024 * 1024, 1)})
+            self.assertEqual(sorted(p.name for p in sw.LOG_DIR.glob("bridge.log.*")), ["bridge.log.1"])
+        finally:
+            for handler in list(sw.LOG.handlers):
+                sw.LOG.removeHandler(handler)
+                handler.close()
+
+    def test_data_use_is_counted_per_path_and_kept(self):
+        import io
+        import json
+        import requests
+        response = requests.Response()
+        response.raw = io.BytesIO(b"x" * 500)
+        response.raw.read()
+        response.headers["ETag"] = "abc"
+        request = requests.Request("GET", self.sw.API_BASE + "/industry", params={"a": 1}).prepare()
+        self.runner._count(request, response)
+        self.runner._count(request, response)
+        self.runner.save_data_use(force=True)
+        self.runner._count(request, response)
+        self.runner.save_data_use(force=True)
+        saved = json.loads((self.folder / pocket_runner.DATA_USE_FILE).read_text())
+        size, reads = saved["paths"]["/industry"]
+        self.assertEqual(reads, 3)
+        self.assertGreater(size, 3 * 500)
 
     def test_bridge_client_is_captured(self):
         api = self.sw.SolApi("k")

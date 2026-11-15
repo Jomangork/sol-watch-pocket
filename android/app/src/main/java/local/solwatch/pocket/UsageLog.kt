@@ -13,8 +13,9 @@ import java.io.File
  * Every 10 minutes while SOL-Watch runs it notes the phone's battery level, whether it's charging,
  * the app's own network bytes and whether the network is metered, in files/usage.csv (kept 14 days).
  * Android's own battery screen resets at every full charge, and its data screen reset with an update,
- * so this keeps the figures across both. Removing it: this file, its call in BridgeService and
- * UsageCard in Screens.kt.
+ * so this keeps the figures across both. Since 0.8.0 it also shows what each check's reads cost (the
+ * wrapper's data_use.json). Removing it: this file, its call in BridgeService, UsageCard in Screens.kt,
+ * and the counting in pocket_runner (_count, save_data_use).
  */
 object UsageLog {
     private const val FILE = "usage.csv"
@@ -108,7 +109,44 @@ object UsageLog {
         }
     }
 
-    fun clear(context: Context) = synchronized(this) { file(context).delete() }
+    fun clear(context: Context) = synchronized(this) {
+        file(context).delete()
+        dataUseFile(context).delete()
+    }
+
+    // ---- data per check (the wrapper's data_use.json) ----
+
+    data class PathUse(val path: String, val name: String, val bytes: Long, val reads: Long)
+
+    private fun dataUseFile(context: Context) = File(File(context.filesDir, "bridge"), "data_use.json")
+
+    /** (since, paths by bytes, most first) from data_use.json; null before the first save (5 minutes in). */
+    fun parseDataUse(json: String): Pair<Long, List<PathUse>> {
+        val o = org.json.JSONObject(json)
+        val paths = o.optJSONObject("paths") ?: org.json.JSONObject()
+        val names = o.optJSONObject("names") ?: org.json.JSONObject()
+        fun nameOf(path: String) = names.optString(path).ifBlank {
+            names.keys().asSequence().firstOrNull { path.startsWith("$it/") }?.let { names.optString(it) } ?: path
+        }
+        val list = paths.keys().asSequence().map { path ->
+            val pair = paths.optJSONArray(path)
+            PathUse(path, nameOf(path), pair?.optLong(0) ?: 0, pair?.optLong(1) ?: 0)
+        }.sortedByDescending { it.bytes }.toList()
+        return o.optLong("since") * 1000 to list
+    }
+
+    fun dataUse(context: Context): Pair<Long, List<PathUse>>? =
+        runCatching { parseDataUse(dataUseFile(context).readText()) }.getOrNull()
+
+    /** "Industry: 41% · 32 MB · 1,234 reads, 27 KB each", the biggest first. */
+    fun describeDataUse(use: List<PathUse>, top: Int = 10): List<String> {
+        val total = use.sumOf { it.bytes }.coerceAtLeast(1)
+        return use.take(top).map {
+            val each = if (it.reads > 0) it.bytes / it.reads / 1024.0 else 0.0
+            "${it.name}: ${(it.bytes * 100 / total)}% · ${dataLabel(it.bytes / 1024.0 / 1024.0)} · " +
+                "%,d reads, %.1f KB each".format(it.reads, each)
+        }
+    }
 
     /** Summary plus the raw samples, for pasting into a chat. */
     fun export(context: Context): String {
@@ -120,6 +158,10 @@ object UsageLog {
             describe(summarize(samples, now - 24 * 3600 * 1000L)).forEach { appendLine("  $it") }
             appendLine("Whole log:")
             describe(summarize(samples)).forEach { appendLine("  $it") }
+            dataUse(context)?.let { (since, use) ->
+                appendLine("Data per check since ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(since))}:")
+                describeDataUse(use, top = 40).forEach { appendLine("  $it") }
+            }
             appendLine("time,battery%,charging,appBytes,mobile,running")
             samples.forEach { appendLine(it.line()) }
         }

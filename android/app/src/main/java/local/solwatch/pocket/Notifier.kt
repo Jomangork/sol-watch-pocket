@@ -34,6 +34,8 @@ object Notifier {
     // Chat makes a sound (unlike the other quiet channels). A new id, because Android keeps a
     // channel's importance from when it was first made: the old silent "chat" channel is removed.
     const val CHAT = "chat_messages"
+    // Reminders the user set on Calendar entries: they asked for them, so they make a sound.
+    const val REMINDER = "calendar_reminders"
     // Every alert goes in one bundle (before 0.7.0: one per channel, whose summaries had the channels' hash codes).
     private const val GROUP = "sol_alerts"
     private const val SUMMARY_ID = 3
@@ -72,6 +74,11 @@ object Notifier {
             }
         )
         manager.createNotificationChannel(
+            NotificationChannel(REMINDER, "Calendar reminders", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Reminders you set on Calendar entries"
+            }
+        )
+        manager.createNotificationChannel(
             NotificationChannel(SERVICE, "Running", NotificationManager.IMPORTANCE_MIN).apply {
                 description = "The ongoing notification Android requires while SOL-Watch runs"
             }
@@ -96,6 +103,7 @@ object Notifier {
         val androidChannel = when (priority) {
             "urgent" -> URGENT
             "chat" -> CHAT
+            "reminder" -> REMINDER
             else -> (channel.takeIf { c -> QUIET.any { it.first == c } } ?: "corp")
                 .let { if (Settings.soundAll(context)) soundId(it) else it }
         }
@@ -136,6 +144,7 @@ object Notifier {
         val summaryChannel = when {
             URGENT in channels -> URGENT
             CHAT in channels -> CHAT
+            REMINDER in channels -> REMINDER
             channels.any { it.endsWith("_sound") } -> channels.first { it.endsWith("_sound") }
             else -> "corp"
         }
@@ -174,5 +183,5 @@ object Notifier {
     }
 
     private fun channelLabel(channel: String) =
-        QUIET.firstOrNull { it.first == channel }?.second ?: "SOL-Watch"
+        QUIET.firstOrNull { it.first == channel }?.second ?: if (channel == "calendar") "Calendar" else "SOL-Watch"
 }

@@ -14,6 +14,8 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.LinearProgressIndicator
+import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
@@ -150,7 +152,9 @@ class SolWidget : GlanceAppWidget() {
         val accent = accentFor(Settings.accent(context)).color
         val logo = savedLogoBitmap(context, "company", scale = 4)
         val recent = store.recent("all", "", limit = 8).filter { it.id != urgent?.id && it.priority != "urgent" }
-        provideContent { WidgetBody(context, urgent, urgentCount, alertCount, game, status, accent, logo, recent) }
+        val now = System.currentTimeMillis()
+        val next = CalendarStore.nextMajor(CalendarStore.load(context), now)
+        provideContent { WidgetBody(context, urgent, urgentCount, alertCount, game, status, accent, logo, recent, next, now) }
     }
 }
 
@@ -167,12 +171,14 @@ private fun WidgetBody(
     accent: Color,
     logo: android.graphics.Bitmap?,
     recent: List<Alert>,
+    next: CalEntry?,
+    now: Long,
 ) {
     val (state, label) = health(context, status)
     // Space beyond the basic layout (about 225 dp tall) goes, in order, to the urgent alert's full
     // text, more arrivals, then the latest alerts. One small line is about 16 dp.
     val size = LocalSize.current
-    var spare = (size.height.value - 225f).coerceAtLeast(0f)
+    var spare = (size.height.value - 225f - (if (next != null) 44f else 0f)).coerceAtLeast(0f)
     val urgentText = urgent?.plain?.trim()?.replace("\n", " · ")?.take(480).orEmpty()
     val charsPerLine = ((size.width.value - 50f) / 6.5f).coerceAtLeast(20f)
     val urgentNeeds = kotlin.math.ceil(urgentText.length / charsPerLine).toInt().coerceIn(2, 8)
@@ -242,6 +248,25 @@ private fun WidgetBody(
                         style = TextStyle(color = c(PocketColors.muted), fontSize = 11.sp),
                     )
                 }
+            }
+        }
+        if (next?.at != null) {
+            // The next major Calendar entry (a rule change, the ballot closing); opens the Calendar tab.
+            Spacer(GlanceModifier.height(8.dp))
+            Row(
+                GlanceModifier.fillMaxWidth().background(c(PocketColors.panelHigh)).cornerRadius(12.dp)
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .clickable(actionStartActivity<MainActivity>(actionParametersOf(TAB_KEY to "calendar"))),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(GlanceModifier.defaultWeight()) {
+                    Text(next.title, maxLines = 1,
+                        style = TextStyle(color = c(PocketColors.text), fontWeight = FontWeight.Bold, fontSize = 12.sp))
+                    Text(DateText.day(next.at) + ", " + DateText.time(next.at), maxLines = 1,
+                        style = TextStyle(color = c(PocketColors.muted), fontSize = 11.sp))
+                }
+                Text(CalendarStore.countdown(next.at, now),
+                    style = TextStyle(color = c(kindColor(next.kind)), fontWeight = FontWeight.Bold, fontSize = 15.sp))
             }
         }
         if (game != null) {
@@ -320,6 +345,7 @@ private fun WidgetBody(
 }
 
 private val PANEL_HEIGHT = 72.dp
+private val TAB_KEY = ActionParameters.Key<String>(PocketNav.EXTRA_TAB)
 
 class SolWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = SolWidget()

@@ -44,6 +44,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 
+/** A tab another part of the app asks to open (the widget's next-event row opens the Calendar). */
+object PocketNav {
+    const val EXTRA_TAB = "local.solwatch.pocket.TAB"
+    var requested by mutableStateOf<String?>(null)
+
+    fun take(intent: android.content.Intent?) {
+        intent?.getStringExtra(EXTRA_TAB)?.let { requested = it }
+    }
+}
+
 /** What the Personalise card changes, so the whole app redraws at once. */
 object LookState {
     var accent by mutableStateOf("gold")
@@ -64,17 +74,28 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         LookState.load(this)
+        PocketNav.take(intent)
         setContent {
             PocketTheme(accentFor(LookState.accent).color) { PocketScreens() }
         }
     }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        PocketNav.take(intent)
+    }
 }
 
-private val TABS = listOf("🔔" to "Alerts", "⏱️" to "Checks", "📡" to "Status")
+private val TABS = listOf("🔔" to "Alerts", "📅" to "Calendar", "⏱️" to "Checks", "📡" to "Status")
 
 @Composable
 fun PocketScreens() {
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(PocketNav.requested) {
+        val wanted = TABS.indexOfFirst { it.second.equals(PocketNav.requested, ignoreCase = true) }
+        if (wanted >= 0) tab = wanted
+        PocketNav.requested = null
+    }
     val context = LocalContext.current
     val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) {
@@ -105,7 +126,8 @@ fun PocketScreens() {
         val modifier = Modifier.padding(padding)
         when (tab) {
             0 -> AlertsScreen(modifier)
-            1 -> ChecksScreen(modifier)
+            1 -> CalendarScreen(modifier)
+            2 -> ChecksScreen(modifier)
             else -> StatusScreen(modifier)
         }
     }

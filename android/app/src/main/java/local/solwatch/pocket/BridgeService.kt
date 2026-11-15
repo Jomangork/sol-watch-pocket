@@ -133,6 +133,7 @@ class BridgeService : Service() {
                     Kwarg("code_dir", codeDir(this).absolutePath),
                     Kwarg("auto_update", Settings.autoUpdate(this)),
                     Kwarg("update_every", updateEvery(metered())),
+                    Kwarg("log_sizes", Settings.logSizes(this).toTypedArray()),
                     Kwarg("settings", python.getModule("pocket_runner").callAttr(
                         "settings_ini", Settings.fleetFlights(this), Settings.fleetWarningMinutes(this),
                         Kwarg("elevator_trips", Settings.elevatorTrips(this)),
@@ -238,6 +239,12 @@ class BridgeService : Service() {
         fun widget(json: String) {
             GameGlance.store(context, json)
             WidgetUpdater.request(context, now = true)
+        }
+
+        /** The Calendar tab's entries, once a minute; also the clock for calendar reminders. */
+        fun calendar(json: String) {
+            CalendarStore.store(context, json)
+            WidgetUpdater.request(context)
         }
 
         fun status(json: String) {

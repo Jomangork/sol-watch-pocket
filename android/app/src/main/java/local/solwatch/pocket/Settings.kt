@@ -77,6 +77,22 @@ object Settings {
 
     fun setElevatorTrips(context: Context, on: Boolean) = prefs(context).edit().putBoolean("elevator_trips", on).apply()
 
+    // The Storage card: the bridge's log sizes (bridge.log MB, old copies, errors.log MB, old copies), read when
+    // the bridge starts, and how many days of alert history to keep.
+    val BRIDGE_LOG_SIZES = listOf(5, 5, 2, 3)  // the bridge's own
+    val PHONE_LOG_SIZES = listOf(2, 3, 1, 1)
+
+    fun logSizes(context: Context): List<Int> =
+        prefs(context).getString("log_sizes", null)?.split(',')?.mapNotNull { it.toIntOrNull() }?.takeIf { it.size == 4 }
+            ?: BRIDGE_LOG_SIZES
+
+    fun setLogSizes(context: Context, sizes: List<Int>) =
+        prefs(context).edit().putString("log_sizes", sizes.joinToString(",")).apply()
+
+    fun historyDays(context: Context) = prefs(context).getInt("history_days", 30)
+
+    fun setHistoryDays(context: Context, days: Int) = prefs(context).edit().putInt("history_days", days).apply()
+
     fun fleetWarningMinutes(context: Context) = prefs(context).getInt("fleet_warning_minutes", 30)
 
     fun setFleetWarningMinutes(context: Context, minutes: Int) =

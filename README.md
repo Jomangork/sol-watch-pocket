@@ -9,10 +9,12 @@ It's a player-made tool, not made or supported by the game's developers.
 ## What it does
 
 - **Alerts as notifications,** all in one bundle. Each one's title is its headline, with the rest underneath and the game time in the header, so nothing shows twice. 🚨 losses and failures, 🚨⚔️ incoming fleets, 🆘 escape capsules and 🔑 key problems are loud. Everything else is silent, sorted into the bridge's channels (Corp, General, Alliance). Chat has its own channel with a sound.
-- **Alert history** for 30 days, with filters and search.
+- **Alert history** for 30 days (7 to 90, your choice), with filters and search.
+- **Calendar tab:** the game's coming rule changes (power, relays, ship module parts), Earth's ballot and the Security Council, elevators being built, hazard forecasts, and our own deadlines (research, construction, arrivals, elevator cargo, diplomacy offers). Agenda and month views, a reminder on any entry, and "Add to phone calendar". It uses only replies the checks already read, so it costs no extra data.
 - **Checks menu.** Each of the bridge's checks can run at its own interval or be switched off, with presets (Recommended, Saver, Fast). The menu shows reads a minute against the game's limit and an estimate of the data each check uses. Mobile data can have its own settings, applied when the phone leaves Wi-Fi.
 - **Our fleet flights and elevator cargo** (optional, on the Checks tab): a notice when one of your fleets leaves, changes course, is about to land and lands, and the same for your space elevator bookings.
-- **Home-screen widget:** the latest urgent alert, money and income, research, and the next arrivals. It shows more when it's bigger.
+- **Home-screen widget:** the latest urgent alert, the next big Calendar event with a countdown, money and income, research, and the next arrivals. It shows more when it's bigger.
+- **Storage** (Status tab): the space used, how big the bridge's logs may grow, and how long alert history is kept.
 - **Status:** a green, yellow or red dot. Shows which sections your API key can read, plus the bridge's own log. When the game's server is down, the dot turns yellow and the log notes the outage once rather than every failed read.
 - **Bridge updates from GitHub,** optional and on by default, checked hourly on Wi-Fi and daily on mobile data. A new `sol_watch.py` is checked before it's used (newer, compiles, still has what the app hooks into), runs on trial, and is rolled back if it fails to start.
 - **App updates from this repository's releases,** checked hourly on Wi-Fi and daily on mobile data. The app tells you when a new version is out; tapping the notice downloads it in your browser, and opening the download installs it. The app doesn't install anything by itself: with that ability, Play Protect called it harmful.
