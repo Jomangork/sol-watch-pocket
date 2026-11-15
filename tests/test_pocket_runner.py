@@ -49,7 +49,7 @@ class PureFunctions(unittest.TestCase):
     def test_key_advice_is_reworded_for_the_app(self):
         line = ("🔑 Make a new key in the game, put it in `.env` as `SOL_BRIDGE_API_KEY` and restart the bridge.")
         self.assertEqual(pocket_runner.app_wording(line),
-                         "🔑 Make a new key in the game, paste it on SOL-Watch Pocket's Status tab and tap Save key.")
+                         "🔑 Make a new key in the game, paste it on Sol Watch's Status tab and tap Save key.")
 
     def test_channel_of(self):
         self.assertEqual(pocket_runner.channel_of("pocket://alliance"), "alliance")
