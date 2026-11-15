@@ -1,4 +1,6 @@
-# SOL-Watch Pocket
+# Sol Watch
+
+Formerly Sol Watch (renamed in 0.8.2; the repository keeps its name so updates keep working).
 
 **Work in progress. Not finished, not fully working, not supported.** Try it only if you're fine with that.
 
@@ -9,6 +11,7 @@ It's a player-made tool, not made or supported by the game's developers.
 ## What it does
 
 - **Alerts as notifications,** all in one bundle. Each one's title is its headline, with the rest underneath and the game time in the header, so nothing shows twice. 🚨 losses and failures, 🚨⚔️ incoming fleets, 🆘 escape capsules and 🔑 key problems are loud. Everything else is silent, sorted into the bridge's channels (Corp, General, Alliance). Chat has its own channel with a sound.
+- **Alert types** (Checks tab, and under each alert in the list): loud, quiet or off for each kind of alert, such as research finished or a new contract, from the bridge's own list of kinds (bridge 1.08.00+). Off skips the notification but keeps the alert in the history.
 - **Alert history** for 30 days (7 to 90, your choice), with filters and search.
 - **Calendar tab:** the game's coming rule changes (power, relays, ship module parts), Earth's ballot and the Security Council, elevators being built, hazard forecasts, and our own deadlines (research, construction, arrivals, elevator cargo, diplomacy offers). Agenda and month views, a reminder on any entry, and "Add to phone calendar". It uses only replies the checks already read, so it costs no extra data.
 - **Checks menu.** Each of the bridge's checks can run at its own interval or be switched off, with presets (Recommended, Saver, Fast). The menu shows reads a minute against the game's limit and an estimate of the data each check uses. Mobile data can have its own settings, applied when the phone leaves Wi-Fi.

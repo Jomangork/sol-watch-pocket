@@ -99,6 +99,8 @@ fun AlertsScreen(modifier: Modifier) {
     val alerts by produceState(emptyList<Alert>(), version, filter, query) {
         value = withContext(Dispatchers.IO) { store.recent(filter, query) }
     }
+    val kinds = remember { AlertKinds.load(context).flatMap { it.kinds }.associateBy { it.id } }
+    var modes by remember { mutableStateOf(Settings.kindModes(context)) }
     Column(modifier.fillMaxSize()) {
         Row(
             Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -115,19 +117,24 @@ fun AlertsScreen(modifier: Modifier) {
         )
         if (alerts.isEmpty()) {
             Text(
-                if (query.isBlank() && filter == "all") "No alerts yet. Start SOL-Watch on the Status tab; " +
+                if (query.isBlank() && filter == "all") "No alerts yet. Start Sol Watch on the Status tab; " +
                     "new alerts appear here as they happen." else "No alerts match.",
                 Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(alerts, key = { it.id }) { AlertCard(it) }
+            items(alerts, key = { it.id }) { alert ->
+                AlertCard(alert, kinds[alert.kind], modes[alert.kind].orEmpty()) { mode ->
+                    Settings.setKindMode(context, alert.kind, mode)
+                    modes = Settings.kindModes(context)
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun AlertCard(alert: Alert) {
+private fun AlertCard(alert: Alert, kind: AlertKind?, mode: String, onMode: (String) -> Unit) {
     val urgent = alert.priority == "urgent"
     Card(
         colors = if (urgent) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
@@ -146,6 +153,15 @@ private fun AlertCard(alert: Alert) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (urgent) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface,
             )
+            if (kind != null) {  // this kind of alert's setting, right here (also on Checks › Alert types)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        kind.about, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall,
+                        color = if (urgent) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    KindChoice(kind.id, kind.priority, mode, onMode)
+                }
+            }
         }
     }
 }
@@ -160,6 +176,11 @@ fun ChecksScreen(modifier: Modifier) {
     var set by rememberSaveable { mutableStateOf(Settings.WIFI) }
     val editing = if (separate) set else Settings.WIFI
     var intervals by remember(editing) { mutableStateOf(Settings.intervals(context, editing)) }
+    var types by rememberSaveable { mutableStateOf(false) }
+    if (types) {
+        AlertTypesScreen(modifier) { types = false }
+        return
+    }
 
     fun change(values: Map<String, Int>) {
         intervals = values
@@ -168,6 +189,20 @@ fun ChecksScreen(modifier: Modifier) {
 
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { ChecksSummary(checks, intervals) }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Alert types", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Loud, quiet or off for each kind of alert, such as research finished or a new contract.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    OutlinedButton(onClick = { types = true }) { Text("Choose") }
+                }
+            }
+        }
         item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -383,7 +418,7 @@ fun StatusScreen(modifier: Modifier) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Running in the background", fontWeight = FontWeight.SemiBold)
                 Text(
-                    if (exempt) "Battery optimisation is off for SOL-Watch, so checks continue with the screen off."
+                    if (exempt) "Battery optimisation is off for Sol Watch, so checks continue with the screen off."
                     else "Android will pause checks while the phone sleeps unless battery optimisation is off for this app.",
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -444,7 +479,7 @@ private fun UsageCard(tick: Int) {
             Text("Battery and data log (temporary)", fontWeight = FontWeight.SemiBold)
             val since = samples.firstOrNull()?.time
             Text(
-                if (since == null) "Records every 10 minutes while SOL-Watch runs; the first sample comes soon."
+                if (since == null) "Records every 10 minutes while Sol Watch runs; the first sample comes soon."
                 else "Recording every 10 minutes since ${shortTime(since / 1000)} (${samples.size} samples). " +
                     "Battery is the whole phone's drain while unplugged; data is this app only.",
                 style = MaterialTheme.typography.bodySmall,
@@ -467,7 +502,7 @@ private fun UsageCard(tick: Int) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
                     val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("SOL-Watch usage log", UsageLog.export(context)))
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Sol Watch usage log", UsageLog.export(context)))
                     copied = true
                 }) { Text(if (copied) "Copied" else "Copy log") }
                 TextButton(onClick = { UsageLog.clear(context); cleared++; copied = false }) { Text("Clear") }
@@ -539,7 +574,7 @@ private fun StorageCard(tick: Int, running: Boolean) {
             }
             Text(
                 "Logs can grow to $max MB. Each log starts a new file when it's full and keeps the last few old ones; " +
-                    "the oldest goes first. A change restarts SOL-Watch.",
+                    "the oldest goes first. A change restarts Sol Watch.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (sizes != Settings.PHONE_LOG_SIZES) {
@@ -566,7 +601,7 @@ private fun AppUpdateCard() {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("App updates", fontWeight = FontWeight.SemiBold)
             Text(
-                "SOL-Watch Pocket ${BuildConfig.VERSION_NAME}. Checks github.com/${AppUpdater.REPO} hourly on Wi-Fi " +
+                "Sol Watch ${BuildConfig.VERSION_NAME}. Checks github.com/${AppUpdater.REPO} hourly on Wi-Fi " +
                     "and daily on mobile data while running. A new version downloads in your browser; open the " +
                     "download to install it.",
                 style = MaterialTheme.typography.bodySmall,

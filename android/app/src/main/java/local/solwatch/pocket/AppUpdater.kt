@@ -93,7 +93,7 @@ object AppUpdater {
         val already = prefs.getString(AVAILABLE, null) == release.version
         prefs.edit().putString(AVAILABLE, release.version).putString(AVAILABLE_URL, release.apkUrl).apply()
         if (!already) {
-            notify(context, release, "SOL-Watch Pocket ${release.version} is available",
+            notify(context, release, "Sol Watch ${release.version} is available",
                 "Tap to download it (${release.size / 1_000_000} MB), then open the download to install.")
         }
         return "Version ${release.version} is available. Download it, then open the file to install.".also { say(context, it) }
@@ -122,7 +122,7 @@ object AppUpdater {
     fun createChannel(context: Context) {
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL, "App updates", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "A new version of SOL-Watch Pocket is available"
+                description = "A new version of Sol Watch is available"
             }
         )
     }

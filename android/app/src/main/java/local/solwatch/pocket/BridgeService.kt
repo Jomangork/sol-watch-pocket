@@ -159,7 +159,7 @@ class BridgeService : Service() {
                 if (rolledBack != null && rolledBack != "None") {
                     Sender(this).deliver(
                         "corp", "BRIDGE UPDATE", "🆕 $rolledBack", "🆕 $rolledBack", "urgent",
-                        "🆕 Bridge update rolled back", rolledBack, "",
+                        "🆕 Bridge update rolled back", rolledBack, "", "",
                     )
                     continue
                 }
@@ -224,17 +224,20 @@ class BridgeService : Service() {
     class Sender(private val context: Context) {
         fun deliver(
             channel: String, header: String, text: String, plain: String, priority: String,
-            title: String, body: String, gameTime: String,
+            title: String, body: String, gameTime: String, kind: String,
         ) {
-            AlertStore.get(context).add(channel, header, text, plain, priority)
+            // The user's choice for this kind of alert on the Alert types page, if any.
+            val mode = Settings.kindMode(context, kind)
+            val level = AlertKinds.level(priority, mode)
+            AlertStore.get(context).add(channel, header, text, plain, level, kind)
             when {
                 text.startsWith("🔑") -> raiseWarning(context, "API key problem")
                 // Only while a newer bridge waits for the user: with automatic updates on, the app installs it.
                 text.startsWith("🆕") && isUpdateWaiting(text) && !Settings.autoUpdate(context) ->
                     raiseWarning(context, "Bridge update available")
             }
-            Notifier.show(context, channel, header, priority, title, body, gameTime)
-            WidgetUpdater.request(context, now = priority == "urgent")
+            if (mode != AlertKinds.OFF) Notifier.show(context, channel, header, level, title, body, gameTime)
+            WidgetUpdater.request(context, now = level == "urgent")
         }
 
         /** "🆕 SOL-Watch 1.08.00 is available…" but not "Installed…", "rolled back" or "Up to date". */

@@ -201,7 +201,7 @@ private fun WidgetBody(
             }
             Column(GlanceModifier.defaultWeight()) {
                 Text(
-                    game?.company?.ifBlank { null } ?: "SOL-Watch",
+                    game?.company?.ifBlank { null } ?: "Sol Watch",
                     maxLines = 1,
                     style = TextStyle(color = c(PocketColors.text), fontWeight = FontWeight.Bold, fontSize = 14.sp),
                 )

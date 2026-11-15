@@ -15,11 +15,12 @@ data class Alert(
     val text: String,
     val plain: String,
     val priority: String,
+    val kind: String = "",  // the bridge's alert kind (bridge 1.08.00+), or "" for an unlabelled alert
 )
 
 /** Every alert the bridge handed over, kept for Settings.historyDays (30 by default) in the app's private database. */
 class AlertStore private constructor(private val context: Context) :
-    SQLiteOpenHelper(context, "alerts.db", null, 1) {
+    SQLiteOpenHelper(context, "alerts.db", null, 2) {
 
     private val _version = MutableStateFlow(0)
     /** Bumped on every change, so screens know to reload. */
@@ -29,14 +30,16 @@ class AlertStore private constructor(private val context: Context) :
         db.execSQL(
             "CREATE TABLE alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, " +
                 "channel TEXT NOT NULL, header TEXT NOT NULL, text TEXT NOT NULL, plain TEXT NOT NULL, " +
-                "priority TEXT NOT NULL)"
+                "priority TEXT NOT NULL, kind TEXT NOT NULL DEFAULT '')"
         )
         db.execSQL("CREATE INDEX alerts_at ON alerts(at)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) db.execSQL("ALTER TABLE alerts ADD COLUMN kind TEXT NOT NULL DEFAULT ''")
+    }
 
-    fun add(channel: String, header: String, text: String, plain: String, priority: String): Long {
+    fun add(channel: String, header: String, text: String, plain: String, priority: String, kind: String = ""): Long {
         val now = System.currentTimeMillis()
         val id = writableDatabase.insert("alerts", null, ContentValues().apply {
             put("at", now)
@@ -45,6 +48,7 @@ class AlertStore private constructor(private val context: Context) :
             put("text", text)
             put("plain", plain)
             put("priority", priority)
+            put("kind", kind)
         })
         if (id % 200 == 0L) prune()
         _version.value++
@@ -70,7 +74,7 @@ class AlertStore private constructor(private val context: Context) :
                 while (it.moveToNext()) add(
                     Alert(
                         it.getLong(0), it.getLong(1), it.getString(2), it.getString(3),
-                        it.getString(4), it.getString(5), it.getString(6)
+                        it.getString(4), it.getString(5), it.getString(6), it.getString(7)
                     )
                 )
             }
@@ -84,6 +88,12 @@ class AlertStore private constructor(private val context: Context) :
         return readableDatabase.rawQuery("SELECT COUNT(*) FROM alerts WHERE $where", args)
             .use { if (it.moveToFirst()) it.getInt(0) else 0 }
     }
+
+    /** How many alerts of each kind arrived since the given time. */
+    fun countsByKind(sinceMs: Long): Map<String, Int> =
+        readableDatabase.rawQuery(
+            "SELECT kind, COUNT(*) FROM alerts WHERE at >= ? AND kind != '' GROUP BY kind", arrayOf(sinceMs.toString())
+        ).use { buildMap { while (it.moveToNext()) put(it.getString(0), it.getInt(1)) } }
 
     /** Drops alerts older than the history length the user picked. */
     fun prune() {

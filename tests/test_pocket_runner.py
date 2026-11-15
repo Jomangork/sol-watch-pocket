@@ -1,4 +1,5 @@
 """Offline tests for pocket_runner (no network). Run: python3 -m unittest discover -s tests"""
+import json
 import os
 import sys
 import tempfile
@@ -18,9 +19,11 @@ class FakeSender:
         self.statuses = []
         self.widgets = []
         self.calendars = []
+        self.kinds = []
 
-    def deliver(self, channel, header, text, plain, priority, title="", body="", game_time=""):
+    def deliver(self, channel, header, text, plain, priority, title="", body="", game_time="", kind=""):
         self.delivered.append((channel, header, text, plain, priority, title, body, game_time))
+        self.kinds.append(kind)
 
     def status(self, text):
         self.statuses.append(text)
@@ -92,6 +95,32 @@ class WithBridge(unittest.TestCase):
         self.assertNotIn("<t:", plain)
         self.assertEqual(self.sender.delivered[1][4], "normal")
         self.assertIn("×2", self.sender.delivered[1][2])
+
+    def test_labels_decide_priority_and_survive_the_post(self):
+        sw = self.sw
+        quiet_key = sw.Alert("🔑 The game accepts our API key again.", "key_ok", "info")
+        loud = sw.Alert("🛰️ `14 Nov 2032, 06:22 AM` **Mission failed** | Probe lost", "craft_failed", "urgent",
+                        "Mission failed")
+        discord = sw.Discord(enabled=True)
+        discord.post("pocket://corp", "CRAFT", [loud, loud, quiet_key])
+        self.assertEqual(self.sender.kinds, ["craft_failed", "key_ok"])  # kept through ×2 and the stamp move
+        self.assertEqual([d[4] for d in self.sender.delivered], ["urgent", "normal"])  # no emoji decided it
+        self.assertIn("×2", self.sender.delivered[0][2])
+
+    def test_unlabelled_lines_fall_back_to_emoji(self):
+        self.sw.Discord(enabled=True).post("pocket://corp", "", ["🚨 **Strike** at Vesta"])
+        self.assertEqual((self.sender.kinds, self.sender.delivered[0][4]), ([""], "urgent"))
+
+    def test_alert_kinds_file_for_the_app(self):
+        groups = json.loads((self.folder / pocket_runner.ALERT_KINDS_FILE).read_text(encoding="utf-8"))
+        names = [g["group"] for g in groups]
+        self.assertEqual(names[0], "Bridge and API key")
+        self.assertNotIn(pocket_runner.LITE_GROUP, names)
+        self.assertNotIn("Other", names)  # pocket_kinds lists every kind of the bundled bridge
+        ids = [k["id"] for g in groups for k in g["kinds"]]
+        self.assertEqual(len(ids), len(set(ids)))
+        research = next(k for g in groups for k in g["kinds"] if k["id"] == "research_done")
+        self.assertEqual((research["about"], research["priority"]), ("Research finished", "normal"))
 
     def parts(self, text):
         return pocket_runner.notification_parts(self.sw, text)

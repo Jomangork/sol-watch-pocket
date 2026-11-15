@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SOL-Watch Pocket"
+rootProject.name = "Sol Watch"
 include(":app")

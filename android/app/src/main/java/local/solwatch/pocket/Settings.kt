@@ -98,6 +98,19 @@ object Settings {
     fun setFleetWarningMinutes(context: Context, minutes: Int) =
         prefs(context).edit().putInt("fleet_warning_minutes", minutes).apply()
 
+    /** Loud, quiet or off for one kind of alert (AlertKinds), or "" for the bridge's own choice. */
+    fun kindMode(context: Context, kind: String): String =
+        if (kind.isBlank()) "" else prefs(context).getString("kind_$kind", "") ?: ""
+
+    fun setKindMode(context: Context, kind: String, mode: String) = prefs(context).edit().apply {
+        if (mode.isBlank()) remove("kind_$kind") else putString("kind_$kind", mode)
+    }.apply()
+
+    fun kindModes(context: Context): Map<String, String> = prefs(context).all
+        .filterKeys { it.startsWith("kind_") }
+        .mapNotNull { (key, value) -> (value as? String)?.let { key.removePrefix("kind_") to it } }
+        .toMap()
+
     fun enabled(context: Context) = prefs(context).getBoolean(ENABLED, false)
 
     fun setEnabled(context: Context, on: Boolean) = prefs(context).edit().putBoolean(ENABLED, on).apply()

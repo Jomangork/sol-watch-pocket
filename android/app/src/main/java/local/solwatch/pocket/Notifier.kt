@@ -80,7 +80,7 @@ object Notifier {
         )
         manager.createNotificationChannel(
             NotificationChannel(SERVICE, "Running", NotificationManager.IMPORTANCE_MIN).apply {
-                description = "The ongoing notification Android requires while SOL-Watch runs"
+                description = "The ongoing notification Android requires while Sol Watch runs"
             }
         )
     }
@@ -168,7 +168,7 @@ object Notifier {
     fun service(context: Context, text: String): Notification =
         NotificationCompat.Builder(context, SERVICE)
             .setSmallIcon(R.drawable.ic_notify)
-            .setContentTitle("SOL-Watch is running")
+            .setContentTitle("Sol Watch is running")
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -183,5 +183,5 @@ object Notifier {
     }
 
     private fun channelLabel(channel: String) =
-        QUIET.firstOrNull { it.first == channel }?.second ?: if (channel == "calendar") "Calendar" else "SOL-Watch"
+        QUIET.firstOrNull { it.first == channel }?.second ?: if (channel == "calendar") "Calendar" else "Sol Watch"
 }

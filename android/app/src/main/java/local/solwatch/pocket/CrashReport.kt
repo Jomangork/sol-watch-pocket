@@ -35,7 +35,7 @@ object CrashReport {
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             runCatching {
                 file(app).writeText(
-                    "${Date()}\nSOL-Watch Pocket ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}), " +
+                    "${Date()}\nSol Watch ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}), " +
                         "Android ${android.os.Build.VERSION.RELEASE}, ${android.os.Build.MODEL}\n" +
                         "Thread: ${thread.name}\n\n" + Log.getStackTraceString(error)
                 )
@@ -62,7 +62,7 @@ class CrashActivity : Activity() {
             setBackgroundColor(Color.rgb(10, 14, 22))
         }
         layout.addView(TextView(this).apply {
-            text = "SOL-Watch Pocket stopped"
+            text = "Sol Watch stopped"
             textSize = 20f
             setTextColor(Color.rgb(226, 184, 74))
         })
@@ -75,7 +75,7 @@ class CrashActivity : Activity() {
         buttons.addView(Button(this).apply {
             text = "Copy report"
             setOnClickListener {
-                getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("SOL-Watch crash", report))
+                getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Sol Watch crash", report))
                 text = "Copied"
             }
         })

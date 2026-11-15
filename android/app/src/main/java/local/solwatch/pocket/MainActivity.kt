@@ -144,7 +144,7 @@ private fun PocketHeader() {
     var tick by androidx.compose.runtime.remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(30_000); tick++ } }
     val (state, label) = androidx.compose.runtime.remember(status, tick, logosVersion) { health(context, status) }
-    val name = GameGlance.load(context)?.company?.ifBlank { null } ?: "SOL-Watch Pocket"
+    val name = GameGlance.load(context)?.company?.ifBlank { null } ?: "Sol Watch"
     Row(
         Modifier.fillMaxWidth().background(PocketColors.night).windowInsetsPadding(WindowInsets.statusBars)
             .padding(horizontal = 16.dp, vertical = 10.dp),

@@ -152,8 +152,8 @@ private fun AgendaView(modifier: Modifier, entries: List<CalEntry>, now: Long, o
 private fun EmptyCalendar() {
     val status by BridgeService.status.collectAsState()
     Text(
-        if (status.running) "The calendar fills in within a minute or two of SOL-Watch starting, from the checks' own reads."
-        else "Start SOL-Watch on the Status tab: the calendar comes from its checks' reads.",
+        if (status.running) "The calendar fills in within a minute or two of Sol Watch starting, from the checks' own reads."
+        else "Start Sol Watch on the Status tab: the calendar comes from its checks' reads.",
         style = MaterialTheme.typography.bodyMedium,
         color = PocketColors.muted,
         modifier = Modifier.padding(vertical = 12.dp),
@@ -361,7 +361,7 @@ private fun CalendarDetail(modifier: Modifier, entry: CalEntry, now: Long, onBac
                         }
                     }
                     Text(
-                        "A notification with a sound, while SOL-Watch runs.",
+                        "A notification with a sound, while Sol Watch runs.",
                         fontSize = 12.sp, color = PocketColors.muted,
                     )
                     OutlinedButton(

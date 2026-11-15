@@ -153,7 +153,7 @@ object UsageLog {
         val samples = read(context)
         val now = System.currentTimeMillis()
         return buildString {
-            appendLine("SOL-Watch Pocket ${BuildConfig.VERSION_NAME} usage log")
+            appendLine("Sol Watch ${BuildConfig.VERSION_NAME} usage log")
             appendLine("Last 24 hours:")
             describe(summarize(samples, now - 24 * 3600 * 1000L)).forEach { appendLine("  $it") }
             appendLine("Whole log:")

@@ -1,4 +1,4 @@
-"""Runs the unchanged SOL-Watch bridge (sol_watch.py) inside SOL-Watch Pocket.
+"""Runs the unchanged SOL-Watch bridge (sol_watch.py) inside Sol Watch.
 
 The bridge is not edited. This module hooks into it from outside:
 - its Discord sender is replaced by a call to the app (`sender.deliver(...)`),
@@ -22,6 +22,7 @@ from pathlib import Path
 import pocket_calendar
 import pocket_checks
 import pocket_glance
+import pocket_kinds
 import pocket_update
 
 # Bridge reads the widget summary and the calendar reuse instead of reading again.
@@ -61,9 +62,11 @@ NEW_VERSION_RE = re.compile(r"^🆕 \*\*SOL-Watch (\d+\.\d+\.\d+) is available\*
 
 APP_WORDING = (
     (re.compile(r"put it in `\.env` as `SOL_BRIDGE_API_KEY` and restart the bridge"),
-     "paste it on SOL-Watch Pocket's Status tab and tap Save key"),
+     "paste it on Sol Watch's Status tab and tap Save key"),
 )
 CHAT_MARKS = ("💬", "🤝")
+ALERT_KINDS_FILE = "alert_kinds.json"  # the bridge's alert kinds, for the app's Alert types page (bridge 1.08.00+)
+LITE_GROUP = "Public news (Lite)"  # the lite bridge's posts: the app always runs the full bridge
 STATUS_EVERY_SECONDS = 15
 CALENDAR_EVERY_SECONDS = 60  # the app also checks calendar reminders each time
 DATA_USE_FILE = "data_use.json"  # bytes each API path downloaded, kept across restarts (temporary measuring aid)
@@ -127,6 +130,42 @@ def priority(line):
     if text.startswith(CHAT_MARKS):
         return "chat"
     return "normal"
+
+
+def labels(line):
+    """The bridge's labels on a line (bridge 1.08.00+ posts each as an Alert, a str that carries them):
+    {kind, priority, title, game_ms, key}, or None for a plain line (an older bridge, or one not labelled)."""
+    kind = getattr(line, "kind", None)
+    if not kind:
+        return None
+    return {"kind": str(kind), "priority": str(getattr(line, "priority", "") or "normal"),
+            "title": str(getattr(line, "title", "") or ""), "game_ms": getattr(line, "game_ms", None),
+            "key": str(getattr(line, "key", "") or "")}
+
+
+def app_priority(line):
+    """'urgent', 'chat' or 'normal': the bridge's own label when the line has one ('info' is quiet, so
+    'normal'), else read from its emoji."""
+    found = labels(line)
+    if found is None:
+        return priority(line)
+    return found["priority"] if found["priority"] in ("urgent", "chat") else "normal"
+
+
+def alert_kinds(module):
+    """The bridge's ALERT_KINDS as [{group, kinds: [{id, about, priority}]}], under pocket_kinds' headings
+    (kinds it doesn't list go under "Other"), leaving out the lite bridge's. [] for a bridge without labels."""
+    kinds = getattr(module, "ALERT_KINDS", None)
+    if not isinstance(kinds, dict):
+        return []
+    groups, placed = [], set()
+    for name, ids in pocket_kinds.GROUPS + (("Other", tuple(kinds)),):
+        listed = [{"id": k, "about": kinds[k][0], "priority": kinds[k][1]}
+                  for k in ids if k in kinds and k not in placed]
+        placed.update(entry["id"] for entry in listed)
+        if listed and name != LITE_GROUP:
+            groups.append({"group": name, "kinds": listed})
+    return groups
 
 
 def app_wording(line):
@@ -283,6 +322,7 @@ class Runner:
         module.LOG_DIR = self.folder / "logs"
         self.module = module
         self._patch(module)
+        (self.folder / ALERT_KINDS_FILE).write_text(json.dumps(alert_kinds(module)), encoding="utf-8")
         return module
 
     def _apply_checks(self):
@@ -312,11 +352,12 @@ class Runner:
         # Bridge 1.07.13+ moves each line's game time after its headline inside Discord.post, which the app
         # replaces, so the app does the same here.
         reorder = getattr(sw, "stamp_after_headline", None) or (lambda line: line)
+        relabel = getattr(sw, "relabel", None) or (lambda text, like: text)  # 1.08.00+: keep a line's labels
         original_log = sw._pocket_original_log
         original_read_ok = sw._pocket_original_read_ok
 
         def post(discord, webhook_url, header, lines):
-            lines = sw.merge_repeats([reorder(line) for line in lines])
+            lines = sw.merge_repeats([relabel(reorder(line), line) for line in lines])
             for line in lines:
                 sw.log(line)
             if not discord.enabled:
@@ -425,15 +466,19 @@ class Runner:
     # ---- to the app ----
 
     def _deliver(self, channel, header, line):
+        label = labels(line)  # read before the app rewords the line, which drops them
+        level = app_priority(line)
         found = NEW_VERSION_RE.match(line)
         if found and self.auto_update and self.code_dir:
             self._update_wanted = found.group(1)
             line = f"🆕 SOL-Watch {found.group(1)} is available; the app is installing it now."
         line = app_wording(line)
         title, body, game_time = notification_parts(self.module, line)
+        if not title and label:
+            title = label["title"]
         try:
-            self.sender.deliver(channel, header or "", line, plain(self.module, line), priority(line),
-                                title, body, game_time)
+            self.sender.deliver(channel, header or "", str(line), plain(self.module, line), level,
+                                title, body, game_time, label["kind"] if label else "")
         except Exception as err:  # the app failing to show one alert mustn't stop the bridge
             self.module.log(f"[Pocket] Couldn't hand an alert to the app: {err!r}")
 
