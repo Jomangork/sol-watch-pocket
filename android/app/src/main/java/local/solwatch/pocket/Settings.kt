@@ -72,6 +72,11 @@ object Settings {
 
     fun setFleetFlights(context: Context, on: Boolean) = prefs(context).edit().putBoolean("fleet_flights", on).apply()
 
+    // Posts about our space elevator bookings, the same way (bridge 1.07.15+).
+    fun elevatorTrips(context: Context) = prefs(context).getBoolean("elevator_trips", false)
+
+    fun setElevatorTrips(context: Context, on: Boolean) = prefs(context).edit().putBoolean("elevator_trips", on).apply()
+
     fun fleetWarningMinutes(context: Context) = prefs(context).getInt("fleet_warning_minutes", 30)
 
     fun setFleetWarningMinutes(context: Context, minutes: Int) =

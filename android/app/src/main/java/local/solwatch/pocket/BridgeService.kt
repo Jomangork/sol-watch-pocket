@@ -135,6 +135,7 @@ class BridgeService : Service() {
                     Kwarg("update_every", updateEvery(metered())),
                     Kwarg("settings", python.getModule("pocket_runner").callAttr(
                         "settings_ini", Settings.fleetFlights(this), Settings.fleetWarningMinutes(this),
+                        Kwarg("elevator_trips", Settings.elevatorTrips(this)),
                     )),
                 )
                 runner = created

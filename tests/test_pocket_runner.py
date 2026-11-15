@@ -131,15 +131,17 @@ class WithBridge(unittest.TestCase):
 
     def test_settings_carry_the_fleet_flight_choice(self):
         self.assertIn("fleet_move_posts = no", pocket_runner.settings_ini())
-        ini = pocket_runner.settings_ini(True, 10)
+        ini = pocket_runner.settings_ini(True, 10, elevator_trips=True)
         self.assertIn("fleet_move_posts = yes", ini)
+        self.assertIn("elevator_trip_posts = yes", ini)
         self.assertIn("fleet_arrival_warning_minutes = 10", ini)
         runner = pocket_runner.Runner(self.folder.parent / "flights", "sol_x", FakeSender(), settings=ini)
         sw = runner.prepare()
         sw.load_settings(self.folder.parent / "flights" / "settings.ini")
         self.assertTrue(sw.FLEET_MOVE_POSTS)  # the bridge itself reads the app's choice
+        self.assertTrue(sw.ELEVATOR_TRIP_POSTS)
         self.assertEqual(sw.FLEET_ARRIVAL_WARNING_MINUTES, 10)
-        sw.FLEET_MOVE_POSTS, sw.FLEET_ARRIVAL_WARNING_MINUTES = False, 30  # the module is shared with other tests
+        sw.FLEET_MOVE_POSTS, sw.ELEVATOR_TRIP_POSTS, sw.FLEET_ARRIVAL_WARNING_MINUTES = False, False, 30  # the module is shared with other tests
 
     def test_post_moves_the_game_time_after_the_headline(self):
         self.sw.Discord(enabled=True).post("pocket://corp", "X", ["📭 `14 Nov 2032, 06:22 AM` **The research queue is empty.**"])

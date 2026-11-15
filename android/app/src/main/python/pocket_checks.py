@@ -42,6 +42,8 @@ _ROWS = (
      300, 900, 60, 1.5, False, "The widget's money and income"),
     ("AccountWatcher", "Company", "Daily gift",
      "Daily login gift unclaimed", 600, 1800, 300, 1, True, ""),
+    ("MarketWatcher", "Company", "Market corruption",
+     "Earth's market corruption level changing (downloads the large market reply)", 3600, 21600, 3600, 125, True, ""),
     ("RecordsWatcher", "Company", "Badges & firsts",
      "Badges and firsts", 1800, 3600, 600, 17, True, ""),
     ("ContractsWatcher", "Contracts & factions", "Contract board",
@@ -76,7 +78,7 @@ _ROWS = (
 )
 
 # Shortest interval the bridge allows for each (it refuses less on its own too).
-MIN_SECONDS = {"DerelictWatcher": 600}
+MIN_SECONDS = {"DerelictWatcher": 600, "MarketWatcher": 600}
 MIN_DEFAULT = 10
 MAX_SECONDS = 86400
 PRESETS = ("recommended", "saver", "fast")

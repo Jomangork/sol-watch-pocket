@@ -217,11 +217,12 @@ fun ChecksScreen(modifier: Modifier) {
     }
 }
 
-/** Posts about our own fleets' flights: a bridge setting, so a change restarts the bridge. */
+/** Posts about our own fleets' flights and elevator bookings: bridge settings, so a change restarts the bridge. */
 @Composable
 private fun FleetFlightsCard() {
     val context = LocalContext.current
     var on by remember { mutableStateOf(Settings.fleetFlights(context)) }
+    var elevator by remember { mutableStateOf(Settings.elevatorTrips(context)) }
     var minutes by remember { mutableStateOf(Settings.fleetWarningMinutes(context)) }
     fun applied() { if (BridgeService.status.value.running) BridgeService.restart(context) }
     Card(Modifier.fillMaxWidth()) {
@@ -239,8 +240,20 @@ private fun FleetFlightsCard() {
                 }
                 Switch(checked = on, onCheckedChange = { on = it; Settings.setFleetFlights(context, it); applied() })
             }
-            if (on) {
-                Text("Reminder before landing", style = MaterialTheme.typography.labelMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Our elevator cargo", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "🛗 when a space elevator booking is made and when it arrives, 🔔 a reminder before. " +
+                            "Quiet notifications. Uses the Industry check's reads; no extra data.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = elevator, onCheckedChange = { elevator = it; Settings.setElevatorTrips(context, it); applied() })
+            }
+            if (on || elevator) {
+                Text("Reminder before landing or arrival", style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (choice in listOf(0, 10, 30, 60)) {
                         FilterChip(

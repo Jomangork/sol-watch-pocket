@@ -11,7 +11,7 @@ It's a player-made tool, not made or supported by the game's developers.
 - **Alerts as notifications,** all in one bundle. Each one's title is its headline, with the rest underneath and the game time in the header, so nothing shows twice. 🚨 losses and failures, 🚨⚔️ incoming fleets, 🆘 escape capsules and 🔑 key problems are loud. Everything else is silent, sorted into the bridge's channels (Corp, General, Alliance). Chat has its own channel with a sound.
 - **Alert history** for 30 days, with filters and search.
 - **Checks menu.** Each of the bridge's checks can run at its own interval or be switched off, with presets (Recommended, Saver, Fast). The menu shows reads a minute against the game's limit and an estimate of the data each check uses. Mobile data can have its own settings, applied when the phone leaves Wi-Fi.
-- **Our fleet flights** (optional, on the Checks tab): a notice when one of your fleets leaves, changes course, is about to land and lands.
+- **Our fleet flights and elevator cargo** (optional, on the Checks tab): a notice when one of your fleets leaves, changes course, is about to land and lands, and the same for your space elevator bookings.
 - **Home-screen widget:** the latest urgent alert, money and income, research, and the next arrivals. It shows more when it's bigger.
 - **Status:** a green, yellow or red dot. Shows which sections your API key can read, plus the bridge's own log. When the game's server is down, the dot turns yellow and the log notes the outage once rather than every failed read.
 - **Bridge updates from GitHub,** optional and on by default, checked hourly on Wi-Fi and daily on mobile data. A new `sol_watch.py` is checked before it's used (newer, compiles, still has what the app hooks into), runs on trial, and is rolled back if it fails to start.
@@ -22,7 +22,7 @@ It's a player-made tool, not made or supported by the game's developers.
 ## Install
 
 1. Download the APK from [Releases](../../releases) and open it on the phone. Allow installing from the app you opened it with.
-2. In the game, make an API key just for the phone: Settings › Account › API keys. Tick the same sections as for the bridge: Company, Research, Industry, Launches and craft, Fleets, Mining, Contracts, Discoveries, Alliance, Factions, UEG, Defense, Segments, News and records, and Public chat and Alliance chat if you want chat. Account is optional (daily gift).
+2. In the game, make an API key just for the phone: Settings › Account › API keys. Tick the same sections as for the bridge: Company, Research, Industry, Launches and craft, Fleets, Mining, Contracts, Discoveries, Alliance, Factions, UEG, Defense, Segments, News and records, and Public chat and Alliance chat if you want chat. Account (daily gift) and Market (Earth's market corruption) are optional.
 3. Open the app's **Status** tab, paste the key and tap **Save key**. The list under it shows what the key can read.
 4. Tap **Allow background running** so Android doesn't pause the checks while the phone sleeps, then **Start**.
 
@@ -37,7 +37,10 @@ Android 10 or newer, 64-bit ARM phones only.
 
 ## Battery and data
 
-The app has to stay awake to check every minute or so, so it uses more battery than a typical app. With the recommended settings it makes about 8 reads a minute. That's roughly 1.4 GB of data a month on mobile data, the worst case, measured with every read finding changes; the Saver preset roughly halves it. The overnight battery figures haven't been measured yet.
+The app stays awake to check every minute or so. Measured on one phone over 15 hours in November 2026 (Android's own battery screen and the app's usage log):
+
+- **Battery:** about 0.3% of the battery an hour for the app itself (7% of the phone's drain that day).
+- **Data:** about 4.5 MB an hour with the recommended settings (roughly 3 GB a month on Wi-Fi), and about 2.4 MB an hour with the Saver preset on mobile data (roughly 1.7 GB a month). The Checks tab's estimate is lower than this, so treat it as a guide to which checks cost most.
 
 ## How it works
 

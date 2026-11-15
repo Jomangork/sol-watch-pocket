@@ -38,10 +38,12 @@ check_minutes = 60
 
 
 
-def settings_ini(fleet_flights=False, fleet_warning_minutes=30):
-    """settings.ini with the app's own choices: posts about our fleets' flights (bridge 1.07.14+; an older
-    bridge ignores them) and how many minutes before landing to remind (0: no reminder)."""
+def settings_ini(fleet_flights=False, fleet_warning_minutes=30, elevator_trips=False):
+    """settings.ini with the app's own choices: posts about our fleets' flights (bridge 1.07.14+) and our space
+    elevator bookings (1.07.15+; an older bridge ignores both), and how many minutes before they land or arrive
+    to remind (0: no reminder)."""
     return BASE_SETTINGS + (f"\n[alerts]\nfleet_move_posts = {'yes' if fleet_flights else 'no'}\n"
+                            f"elevator_trip_posts = {'yes' if elevator_trips else 'no'}\n"
                             f"fleet_arrival_warning_minutes = {max(0, min(1440, int(fleet_warning_minutes)))}\n")
 
 
@@ -529,6 +531,11 @@ KEY_GROUPS = {
     "World": ("alliance", "factions", "ueg", "defense", "segments", "news", "chat", "alliance_chat"),
 }
 
+# Sections a bridge reads but doesn't yet list in its KEY_SECTIONS (same shape), so the key card explains them.
+EXTRA_SECTIONS = (
+    ("market", "Market", "optional", ("/market",), "Earth's market corruption alerts (bridge 1.07.16+)"),
+)
+
 
 def describe_key(api_key, module_name="sol_watch"):
     """What a key may read, for the app's key card: one read of the API index (open to any key).
@@ -551,7 +558,7 @@ def describe_key(api_key, module_name="sol_watch"):
     except (ValueError, AttributeError):
         return json.dumps({"ok": False, "error": "The game's answer wasn't readable."})
     known = {sid: {"id": sid, "label": label, "need": need, "enabled": sid in have, "stops": stops}
-             for sid, label, need, _paths, stops in sw.KEY_SECTIONS}
+             for sid, label, need, _paths, stops in EXTRA_SECTIONS + tuple(sw.KEY_SECTIONS)}  # the bridge's own wording wins
     groups = []
     for group, ids in KEY_GROUPS.items():
         rows = [known.pop(sid, {"id": sid, "label": sid.title(), "need": "unused", "enabled": sid in have,
