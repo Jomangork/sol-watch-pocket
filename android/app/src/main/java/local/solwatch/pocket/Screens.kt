@@ -8,6 +8,7 @@ import android.os.Process
 import android.provider.Settings as AndroidSettings
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.height
@@ -152,10 +153,11 @@ fun AlertsScreen(modifier: Modifier) {
 @Composable
 private fun AlertCard(alert: Alert, kind: AlertKind?, mode: String, onMode: (String) -> Unit) {
     val urgent = alert.priority == "urgent"
+    var showKind by rememberSaveable(alert.id) { mutableStateOf(false) }  // tap the alert to show its type's setting
     Card(
         colors = if (urgent) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
         else CardDefaults.cardColors(),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable(enabled = kind != null) { showKind = !showKind },
     ) {
         Column(Modifier.padding(12.dp)) {
             Text(
@@ -169,7 +171,7 @@ private fun AlertCard(alert: Alert, kind: AlertKind?, mode: String, onMode: (Str
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (urgent) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface,
             )
-            if (kind != null) {  // this kind of alert's setting, right here (also on Checks › Alert types)
+            if (kind != null && showKind) {  // this kind of alert's setting, right here (also in Settings › Alert types)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         kind.about, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall,
@@ -194,8 +196,12 @@ fun ChecksScreen(modifier: Modifier) {
     var intervals by remember(editing) { mutableStateOf(Settings.intervals(context, editing)) }
 
     fun change(values: Map<String, Int>) {
+        // A mix that isn't a preset is kept for the Custom chip, both before a preset replaces it and as it changes.
+        val presets = PRESETS.associateWith { Catalog.preset(it) }
+        if (presetInUse(intervals, presets) == CUSTOM) Settings.saveCustomIntervals(context, editing, intervals)
         intervals = values
         Settings.saveIntervals(context, editing, values)
+        if (presetInUse(values, presets) == CUSTOM) Settings.saveCustomIntervals(context, editing, values)
     }
 
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -223,11 +229,21 @@ fun ChecksScreen(modifier: Modifier) {
                             FilterChip(selected = set == Settings.MOBILE, onClick = { set = Settings.MOBILE }, label = { Text("Mobile data") })
                         }
                     }
-                    Text("Start from a preset", style = MaterialTheme.typography.labelMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { change(Catalog.preset("recommended")) }) { Text("Recommended") }
-                        OutlinedButton(onClick = { change(Catalog.preset("saver")) }) { Text("Saver") }
-                        OutlinedButton(onClick = { change(Catalog.preset("fast")) }) { Text("Fast") }
+                    Text("Preset", style = MaterialTheme.typography.labelMedium)
+                    // The one in use is highlighted; Custom is any other mix, and brings back your last one.
+                    val inUse = presetInUse(intervals, PRESETS.associateWith { Catalog.preset(it) })
+                    val custom = Settings.customIntervals(context, editing)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (name in PRESETS) {
+                            FilterChip(
+                                selected = inUse == name, onClick = { change(Catalog.preset(name)) },
+                                label = { Text(name.replaceFirstChar { it.uppercase() }) },
+                            )
+                        }
+                        FilterChip(
+                            selected = inUse == CUSTOM, enabled = custom != null || inUse == CUSTOM,
+                            onClick = { custom?.let { change(it) } }, label = { Text("Custom") },
+                        )
                     }
                 }
             }
@@ -310,20 +326,27 @@ private fun FleetFlightsCard() {
 private fun ChecksSummary(checks: List<Check>, intervals: Map<String, Int>) {
     val reads = readsPerMinute(checks, intervals)
     val data = mebibytesPerMonth(checks, intervals)
-    val over = reads > READS_LIMIT
-    val warn = reads > READS_WARNING
+    val level = readsLevel(reads)
+    // Colour and a symbol, so the level doesn't depend on telling orange from red.
+    val (container, onContainer) = when (level) {
+        ReadsLevel.DANGER -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+        ReadsLevel.CAUTION -> Color(0xFF4A3212) to Color(0xFFFFC27A)
+        ReadsLevel.OK -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Card(
-        colors = if (warn) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-        else CardDefaults.cardColors(),
+        colors = if (level == ReadsLevel.OK) CardDefaults.cardColors()
+        else CardDefaults.cardColors(containerColor = container, contentColor = onContainer),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(12.dp)) {
-            Text("${"%.1f".format(reads)} reads a minute", style = MaterialTheme.typography.titleLarge)
+            Text(level.symbol.let { if (it.isEmpty()) "" else "$it " } + "${"%.1f".format(reads)} reads a minute",
+                style = MaterialTheme.typography.titleLarge)
             Text("Up to ${dataLabel(data)} of data a month", style = MaterialTheme.typography.bodyLarge)
             Text(
                 when {
-                    over -> "Over the game's limit of 60 reads a minute: the API will refuse some reads."
-                    warn -> "Above 40 reads a minute. The game allows 60 per key."
+                    reads > READS_LIMIT -> "Over the game's limit of 60 reads a minute: the API will refuse some reads."
+                    level == ReadsLevel.DANGER -> "Close to the game's limit of 60 reads a minute: slow some checks down."
+                    level == ReadsLevel.CAUTION -> "Above 40 reads a minute, where the bridge starts warning. The game allows 60 per key."
                     else -> "The game allows 60 reads a minute per key."
                 },
                 style = MaterialTheme.typography.bodySmall,

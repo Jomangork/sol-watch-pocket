@@ -20,9 +20,25 @@ data class Check(
 /** Interval choices offered in the menu, in seconds; 0 = off. */
 val INTERVAL_CHOICES = listOf(0, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 21600, 86400)
 
-/** The game allows 60 reads a minute per key; the bridge warns above 40. */
+/** The game allows 60 reads a minute per key; the bridge warns above 40. The menu turns red at 55. */
 const val READS_WARNING = 40.0
+const val READS_DANGER = 55.0
 const val READS_LIMIT = 60.0
+
+enum class ReadsLevel(val symbol: String) { OK(""), CAUTION("⚠️"), DANGER("⛔") }
+
+fun readsLevel(reads: Double) = when {
+    reads >= READS_DANGER -> ReadsLevel.DANGER
+    reads >= READS_WARNING -> ReadsLevel.CAUTION
+    else -> ReadsLevel.OK
+}
+
+val PRESETS = listOf("recommended", "saver", "fast")
+const val CUSTOM = "custom"
+
+/** Which preset these intervals are exactly, or CUSTOM. */
+fun presetInUse(intervals: Map<String, Int>, presets: Map<String, Map<String, Int>>): String =
+    presets.entries.firstOrNull { (_, values) -> values.all { (id, seconds) -> (intervals[id] ?: seconds) == seconds } }?.key ?: CUSTOM
 
 private const val SECONDS_PER_MONTH = 30.0 * 24 * 3600
 

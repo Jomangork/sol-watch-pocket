@@ -28,6 +28,16 @@ object Settings {
         }
     }
 
+    /** The last mix of intervals that wasn't a preset, for the Custom chip (null before there is one). */
+    fun customIntervals(context: Context, set: String): Map<String, Int>? {
+        val json = prefs(context).getString("custom_$set", null)?.let { JSONObject(it) } ?: return null
+        return json.keys().asSequence().associateWith { json.getInt(it) }
+    }
+
+    fun saveCustomIntervals(context: Context, set: String, values: Map<String, Int>) {
+        prefs(context).edit().putString("custom_$set", JSONObject(values).toString()).apply()
+    }
+
     fun setInterval(context: Context, set: String, checkId: String, seconds: Int) {
         saveIntervals(context, set, intervals(context, set) + (checkId to seconds))
     }

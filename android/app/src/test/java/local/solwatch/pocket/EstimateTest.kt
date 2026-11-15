@@ -62,4 +62,17 @@ class EstimateTest {
         val out = readableTimes("lands <t:100:f> (<t:100:R>), ends <t:200:R>") { "T$it" }
         assertEquals("lands T100, ends T200", out)
     }
+
+    @Test fun readsLevels() {
+        assertEquals(ReadsLevel.OK, readsLevel(39.9))
+        assertEquals(ReadsLevel.CAUTION, readsLevel(40.0))
+        assertEquals(ReadsLevel.CAUTION, readsLevel(54.9))
+        assertEquals(ReadsLevel.DANGER, readsLevel(55.0))
+    }
+
+    @Test fun thePresetInUseOrCustom() {
+        val presets = mapOf("recommended" to mapOf("a" to 60, "b" to 300), "fast" to mapOf("a" to 15, "b" to 60))
+        assertEquals("fast", presetInUse(mapOf("a" to 15, "b" to 60), presets))
+        assertEquals(CUSTOM, presetInUse(mapOf("a" to 15, "b" to 300), presets))
+    }
 }
