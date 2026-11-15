@@ -229,11 +229,17 @@ class BridgeService : Service() {
             AlertStore.get(context).add(channel, header, text, plain, priority)
             when {
                 text.startsWith("🔑") -> raiseWarning(context, "API key problem")
-                text.startsWith("🆕") -> raiseWarning(context, "Update available")
+                // Only while a newer bridge waits for the user: with automatic updates on, the app installs it.
+                text.startsWith("🆕") && isUpdateWaiting(text) && !Settings.autoUpdate(context) ->
+                    raiseWarning(context, "Bridge update available")
             }
             Notifier.show(context, channel, header, priority, title, body, gameTime)
             WidgetUpdater.request(context, now = priority == "urgent")
         }
+
+        /** "🆕 SOL-Watch 1.08.00 is available…" but not "Installed…", "rolled back" or "Up to date". */
+        private fun isUpdateWaiting(text: String) = Regex("""\bis available\b""").containsMatchIn(text) &&
+            !text.contains("installing it now")
 
         /** The game's /widget data (money, research, trips), for the home-screen widget. */
         fun widget(json: String) {

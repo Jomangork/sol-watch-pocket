@@ -133,6 +133,8 @@ def install(code_dir, source, running_version, required):
     version = version_of(source)
     if version in _rejected(code_dir):
         return False, f"v{version} failed here before, so it's skipped"
+    if version and version_tuple(version) == version_tuple(running_version):
+        return False, f"Up to date: v{version} is the newest published bridge."
     reason = check_source(source, running_version, required)
     if reason:
         return False, f"Not installing the new bridge: {reason}."

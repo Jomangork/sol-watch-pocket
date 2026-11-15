@@ -124,12 +124,14 @@ enum class Health(val color: Color) { OK(PocketColors.good), WARN(Color(0xFFF2C1
 
 private const val WARN_UNTIL = "warn_until"
 private const val WARN_REASON = "warn_reason"
+private const val WARN_APP_VERSION = "warn_app_version"
 private const val STALE_MS = 5 * 60 * 1000L
 
 /** Marks the app as needing a look for half an hour (a key problem, failed checks, an update). */
 fun raiseWarning(context: Context, reason: String) {
     Settings.prefs(context).edit()
-        .putLong(WARN_UNTIL, System.currentTimeMillis() + 30 * 60 * 1000L).putString(WARN_REASON, reason).apply()
+        .putLong(WARN_UNTIL, System.currentTimeMillis() + 30 * 60 * 1000L).putString(WARN_REASON, reason)
+        .putInt(WARN_APP_VERSION, BuildConfig.VERSION_CODE).apply()
 }
 
 /** A game-server outage shorter than this is a blip: the dot stays green. */
@@ -148,7 +150,8 @@ fun health(context: Context, status: BridgeStatus): Pair<Health, String> {
                 java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(status.outageSince))
             }"
         lastPoll > 0 && now - lastPoll > STALE_MS -> Health.WARN to "No check for ${(now - lastPoll) / 60000} min"
-        prefs.getLong(WARN_UNTIL, 0) > now -> Health.WARN to (prefs.getString(WARN_REASON, null) ?: "Needs a look")
+        // A warning raised before the app last updated is about the old version: dropped.
+        prefs.getLong(WARN_UNTIL, 0) > now && prefs.getInt(WARN_APP_VERSION, 0) == BuildConfig.VERSION_CODE -> Health.WARN to (prefs.getString(WARN_REASON, null) ?: "Needs a look")
         lastPoll == 0L -> Health.WARN to "Starting…"
         else -> Health.OK to "Watching"
     }

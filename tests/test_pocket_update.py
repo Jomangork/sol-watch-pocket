@@ -30,6 +30,13 @@ class Checks(unittest.TestCase):
     def test_not_newer_is_refused(self):
         self.assertIn("isn't newer", pocket_update.check_source(BUNDLED, BUNDLED_VERSION, pocket_runner.REQUIRED))
 
+    def test_the_same_version_is_up_to_date(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            installed, message = pocket_update.install(folder, BUNDLED, BUNDLED_VERSION, pocket_runner.REQUIRED)
+        self.assertFalse(installed)
+        self.assertEqual(message, f"Up to date: v{BUNDLED_VERSION} is the newest published bridge.")
+
     def test_broken_code_is_refused(self):
         broken = bumped() + "\ndef oops(:\n"
         self.assertIn("doesn't compile", pocket_update.check_source(broken, BUNDLED_VERSION, pocket_runner.REQUIRED))
