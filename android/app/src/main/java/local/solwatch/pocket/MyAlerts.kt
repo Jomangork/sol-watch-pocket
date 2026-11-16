@@ -71,9 +71,10 @@ object MyAlerts {
     data class Kind(val id: String, val name: String, val ask: String, val scale: Double, val pick: String = "", val hint: String = "")
 
     val KINDS = listOf(
-        Kind("money_below", "Money below", "Money falls below ($ millions)", 1e6),
-        Kind("money_above", "Money above", "Money rises above ($ millions)", 1e6),
-        Kind("income_below", "Income", "Income falls below ($ millions a day; 0 = turns negative)", 1e6),
+        // The game counts money in millions, and so do these (0.9.0 multiplied by a million: see parse).
+        Kind("money_below", "Money below", "Money falls below ($ millions)", 1.0),
+        Kind("money_above", "Money above", "Money rises above ($ millions)", 1.0),
+        Kind("income_below", "Income", "Income falls below ($ millions a day; 0 = turns negative)", 1.0),
         Kind("stock_hours", "Stock running low", "Runs out within (hours)", 1.0, "stock", "Our stocks, from the Industry check"),
         Kind("supplies_hours", "Crew supplies", "Supplies run out within (hours)", 1.0, "supplies", "Our crewed places, from the Company check"),
         Kind("research_minutes", "Research", "Current research finishes within (minutes)", 1.0),
@@ -84,6 +85,8 @@ object MyAlerts {
     )
 
     fun kind(id: String) = KINDS.firstOrNull { it.id == id } ?: KINDS.first()
+
+    private val MONEY_KINDS = setOf("money_below", "money_above", "income_below")
 
     private const val PREF = "my_alerts"
 
@@ -96,8 +99,12 @@ object MyAlerts {
         val array = JSONArray(json)
         (0 until array.length()).map { i ->
             val o = array.getJSONObject(i)
+            val kind = o.getString("kind")
+            var value = o.optDouble("value", 0.0)
+            // 0.9.0 saved money in dollars ($500M as 5e8); the game and the runner count millions.
+            if (kind in MONEY_KINDS && kotlin.math.abs(value) >= 1e6) value /= 1e6
             MyAlertRule(
-                o.getString("id"), o.getString("kind"), o.optBoolean("on", true), o.optBoolean("loud"), o.optDouble("value", 0.0),
+                o.getString("id"), kind, o.optBoolean("on", true), o.optBoolean("loud"), value,
                 o.optString("place"), o.optString("good"), o.optString("region"), o.optString("spaceport"),
             )
         }
@@ -200,7 +207,7 @@ fun MyAlertsScreen(modifier: Modifier) {
             }
         }
         item {
-            Button(onClick = { editing = MyAlertRule(id = System.currentTimeMillis().toString(36), kind = "money_below", value = 500e6) }) {
+            Button(onClick = { editing = MyAlertRule(id = System.currentTimeMillis().toString(36), kind = "money_below", value = 500.0) }) {
                 Text("Add alert")
             }
         }

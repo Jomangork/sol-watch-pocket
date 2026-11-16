@@ -6,6 +6,7 @@ value has gone back past it) and each rule's current value for the app's My aler
 places, goods, regions and spaceports the editor offers.
 
 Times are real time: the game's clock runs `timeScale` (24) game days to a real day, so 1 game day is 1 real hour.
+Money is in millions, as the game counts it (/me money 41671 is $41.7B), and so are the money rules' values.
 """
 import pocket_calendar
 import pocket_glance
@@ -22,14 +23,14 @@ def _num(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
-def money_text(amount):
-    """$612M, $1.2B, -$8.0M."""
-    sign, amount = ("-" if amount < 0 else ""), abs(amount)
-    if amount >= 1e9:
-        return f"{sign}${amount / 1e9:.1f}B"
-    if amount >= 1e6:
-        return f"{sign}${amount / 1e6:.0f}M" if amount >= 1e8 else f"{sign}${amount / 1e6:.1f}M"
-    return f"{sign}${amount:,.0f}"
+def money_text(millions):
+    """$612M, $41.7B, -$8.0M, $0.5M from an amount in millions (the game's unit)."""
+    sign, amount = ("-" if millions < 0 else ""), abs(millions)
+    if amount >= 1000:
+        return f"{sign}${amount / 1000:.1f}B"
+    if amount >= 100:
+        return f"{sign}${amount:.0f}M"
+    return f"{sign}${amount:.1f}M"
 
 
 def hours_text(hours):

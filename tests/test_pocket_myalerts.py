@@ -29,7 +29,7 @@ def tapped(**extra):
     return base
 
 
-ME = {"money": 600e6, "incomeRate": -8e6, "settledDay": 500.0, "gameDay": 500.0}
+ME = {"money": 600.0, "incomeRate": -8.0, "settledDay": 500.0, "gameDay": 500.0}  # millions, as the game counts
 NAMES = pocket_myalerts.Names({})
 
 
@@ -42,8 +42,8 @@ def check(rules, data=None, me=ME, fired=None):
 class MyAlerts(unittest.TestCase):
     def test_each_kind_reads_its_value(self):
         rules = [
-            {"id": "1", "kind": "money_below", "value": 700e6},
-            {"id": "2", "kind": "money_above", "value": 700e6},
+            {"id": "1", "kind": "money_below", "value": 700.0},
+            {"id": "2", "kind": "money_above", "value": 700.0},
             {"id": "3", "kind": "income_below", "value": 0},
             {"id": "4", "kind": "stock_hours", "value": 4, "place": "tros", "good": "steel"},
             {"id": "5", "kind": "supplies_hours", "value": 3, "place": "vesta_yard"},
@@ -62,19 +62,24 @@ class MyAlerts(unittest.TestCase):
         self.assertEqual(len(alerts), 6)
 
     def test_fires_once_until_the_value_goes_back(self):
-        rule = [{"id": "m", "kind": "money_below", "value": 700e6, "loud": True}]
+        rule = [{"id": "m", "kind": "money_below", "value": 700.0, "loud": True}]
         alerts, _, fired = check(rule)
         self.assertEqual(len(alerts), 1)
         self.assertEqual(alerts[0][1], "💰 Money below $700M")
         again, _, fired = check(rule, fired=fired)
         self.assertEqual(again, [])  # still below: not posted twice
-        _, _, fired = check(rule, me=dict(ME, money=800e6), fired=fired)
+        _, _, fired = check(rule, me=dict(ME, money=800.0), fired=fired)
         self.assertEqual(fired, set())  # back above the line
         third, _, _ = check(rule, fired=fired)
         self.assertEqual(len(third), 1)
 
+    def test_money_in_millions(self):
+        self.assertEqual(pocket_myalerts.money_text(41671), "$41.7B")
+        self.assertEqual(pocket_myalerts.money_text(612), "$612M")
+        self.assertEqual(pocket_myalerts.money_text(-8), "-$8.0M")
+
     def test_switched_off_rules_show_their_value_but_never_post(self):
-        alerts, status, _ = check([{"id": "m", "kind": "money_below", "value": 700e6, "on": False}])
+        alerts, status, _ = check([{"id": "m", "kind": "money_below", "value": 700.0, "on": False}])
         self.assertEqual(alerts, [])
         self.assertTrue(status["m"]["met"])
 

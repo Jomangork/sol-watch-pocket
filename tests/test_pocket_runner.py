@@ -384,8 +384,8 @@ class WithBridge(unittest.TestCase):
         self.assertEqual(saved["connections"]["solthegame.com"], [5, 30])  # added up, not counted twice
 
     def test_my_alerts_post_once_as_company_my_alerts(self):
-        self.runner.set_my_alerts_json(json.dumps([{"id": "m", "kind": "money_below", "value": 700e6, "loud": True}]))
-        self.runner._me = {"money": 600e6, "incomeRate": 0, "settledDay": 1.0, "gameDay": 1.0}
+        self.runner.set_my_alerts_json(json.dumps([{"id": "m", "kind": "money_below", "value": 700.0, "loud": True}]))
+        self.runner._me = {"money": 600.0, "incomeRate": 0, "settledDay": 1.0, "gameDay": 1.0}
         self.runner._check_my_alerts()
         self.runner._my_alerts_due = 0.0
         self.runner._check_my_alerts()  # still below the line: not again

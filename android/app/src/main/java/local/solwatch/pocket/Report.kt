@@ -81,6 +81,19 @@ object Report {
                 appendLine("Fleet flights: ${Settings.fleetFlights(context)} · elevator cargo: ${Settings.elevatorTrips(context)} · reminder before landing: ${Settings.fleetWarningMinutes(context)} min")
                 appendLine("Log sizes (MB, copies, MB, copies): ${Settings.logSizes(context)} · alert history: ${Settings.historyDays(context)} days")
                 appendLine("Alert types changed: " + Settings.kindModes(context).entries.sortedBy { it.key }.joinToString(", ") { "${it.key} ${it.value}" }.ifBlank { "none" })
+                section("My alerts")
+                val (myStatus, _) = MyAlerts.state(context)
+                val rules = MyAlerts.load(context)
+                if (rules.isEmpty()) appendLine("None")
+                for (rule in rules) {
+                    val now = myStatus[rule.id]
+                    appendLine(
+                        "${now?.title?.ifBlank { null } ?: MyAlerts.fallbackTitle(rule, "")} · ${rule.kind} ${MyAlerts.lineText(rule)}" +
+                            listOf(rule.place, rule.good, rule.region, rule.spaceport).filter { it.isNotBlank() }.joinToString("") { " · $it" } +
+                            " · ${if (rule.on) "on" else "off"} · ${if (rule.loud) "loud" else "quiet"}" +
+                            " · ${now?.now ?: "not checked yet"}${if (now?.met == true) " (past its line)" else ""}"
+                    )
+                }
                 section("Alerts in the last 24 hours, by tab")
                 val store = AlertStore.get(context)
                 val dayAgo = now - 24 * 3600 * 1000L
