@@ -53,6 +53,7 @@ class BridgeService : Service() {
     private var updateChecker: Thread? = null
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key != null && key.startsWith("checks_") || key == "separate_mobile") applyChecks()
+        if (key == MyAlerts.SETTING) applyMyAlerts()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -134,6 +135,7 @@ class BridgeService : Service() {
                     Kwarg("auto_update", Settings.autoUpdate(this)),
                     Kwarg("update_every", updateEvery(metered())),
                     Kwarg("log_sizes", Settings.logSizes(this).toTypedArray()),
+                    Kwarg("my_alerts", MyAlerts.json(this)),
                     Kwarg("settings", python.getModule("pocket_runner").callAttr(
                         "settings_ini", Settings.fleetFlights(this), Settings.fleetWarningMinutes(this),
                         Kwarg("elevator_trips", Settings.elevatorTrips(this)),
@@ -183,6 +185,13 @@ class BridgeService : Service() {
         }
             .onFailure { Log.w(TAG, "Couldn't change the checks", it) }
         publish(_status.value.copy(metered = metered()))
+    }
+
+    /** The user's own alerts changed: the running bridge checks the new ones within a minute. */
+    private fun applyMyAlerts() {
+        val current = runner ?: return
+        runCatching { current.callAttr("set_my_alerts_json", MyAlerts.json(this)) }
+            .onFailure { Log.w(TAG, "Couldn't change My alerts", it) }
     }
 
     private fun metered(): Boolean {

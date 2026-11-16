@@ -140,7 +140,7 @@ fun PocketScreens() {
     }
 }
 
-val SETTINGS_CHIPS = listOf("Status", "Checks", "Alert types")
+val SETTINGS_CHIPS = listOf("Status", "Checks", "Alert types", "My alerts")
 
 /** The Settings tab's chip, kept while switching tabs (and set when another part of the app asks for one). */
 object SettingsNav {
@@ -162,6 +162,7 @@ fun SettingsScreen(modifier: Modifier) {
         when (SettingsNav.chip) {
             "Checks" -> ChecksScreen(content)
             "Alert types" -> AlertTypesScreen(content)
+            "My alerts" -> MyAlertsScreen(content)
             else -> StatusScreen(content)
         }
     }

@@ -24,6 +24,7 @@ object AlertTopics {
                 "elevator_soon", "elevator_arrived")),
             Sub("Upkeep", setOf("facility_upgraded", "upgrade_done", "queue_blocked", "queue_summary",
                 "supplies_low", "supplies_summary", "daily_gift")),
+            Sub("My alerts", setOf("my_alert")),  // the user's own thresholds (Settings › My alerts)
             Sub("Claims", setOf("claim_takeover", "claim_lost", "segment_cost_rise", "relay_lost", "codex_stopped")),
         )),
         Tab("Fleets", listOf(

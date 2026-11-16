@@ -383,6 +383,20 @@ class WithBridge(unittest.TestCase):
         saved = json.loads((self.folder / pocket_runner.DATA_USE_FILE).read_text())
         self.assertEqual(saved["connections"]["solthegame.com"], [5, 30])  # added up, not counted twice
 
+    def test_my_alerts_post_once_as_company_my_alerts(self):
+        self.runner.set_my_alerts_json(json.dumps([{"id": "m", "kind": "money_below", "value": 700e6, "loud": True}]))
+        self.runner._me = {"money": 600e6, "incomeRate": 0, "settledDay": 1.0, "gameDay": 1.0}
+        self.runner._check_my_alerts()
+        self.runner._my_alerts_due = 0.0
+        self.runner._check_my_alerts()  # still below the line: not again
+        self.assertEqual(self.sender.kinds, ["my_alert"])
+        channel, header, text, plain, prio = self.sender.delivered[0][:5]
+        self.assertEqual((header, prio), ("MY ALERTS", "urgent"))
+        self.assertIn("Money below $700M", text)
+        state = json.loads((self.folder / pocket_runner.MY_ALERTS_FILE).read_text(encoding="utf-8"))
+        self.assertTrue(state["status"]["m"]["met"])
+        self.assertEqual(json.loads((self.folder / pocket_runner.MY_ALERTS_FIRED_FILE).read_text()), ["m"])
+
     def test_bridge_client_is_captured(self):
         api = self.sw.SolApi("k")
         self.assertIs(self.runner.api, api)

@@ -23,11 +23,12 @@ import pocket_calendar
 import pocket_checks
 import pocket_glance
 import pocket_kinds
+import pocket_myalerts
 import pocket_update
 
 # Bridge reads the widget summary and the calendar reuse instead of reading again.
 TAPPED_PATHS = tuple(dict.fromkeys(("/research", "/craft", "/clock", "/reference/techs", "/reference/places",
-                                    "/reference/bodies") + pocket_calendar.PATHS))
+                                    "/reference/bodies") + pocket_calendar.PATHS + pocket_myalerts.PATHS))
 
 # Written as settings.ini. The intervals themselves come from the user's checks (applied over
 # these at startup and live); derelicts are "on" here only so the bridge creates that watcher,
@@ -71,6 +72,8 @@ ALERT_KINDS_FILE = "alert_kinds.json"  # the bridge's alert kinds, for the app's
 LITE_GROUP = "Public news (Lite)"  # the lite bridge's posts: the app always runs the full bridge
 STATUS_EVERY_SECONDS = 15
 CALENDAR_EVERY_SECONDS = 60  # the app also checks calendar reminders each time
+MY_ALERTS_FILE = "my_alerts.json"  # each rule's current value and the editor's choices, for the app
+MY_ALERTS_FIRED_FILE = "my_alerts_fired.json"  # rules already posted, so a restart doesn't post them again
 DATA_USE_FILE = "data_use.json"  # bytes each API path downloaded, kept across restarts (temporary measuring aid)
 DATA_USE_SAVE_SECONDS = 300
 DATA_USE_VERSION = 2  # 2 (0.8.8): bodies counted too; earlier files counted only headers for gzipped replies
@@ -242,7 +245,7 @@ def notification_parts(module, text):
 
 class Runner:
     def __init__(self, folder, api_key, sender, checks=None, timezone=None, settings=BASE_SETTINGS,
-                 code_dir=None, auto_update=False, update_every=86400, log_sizes=None):
+                 code_dir=None, auto_update=False, update_every=86400, log_sizes=None, my_alerts="[]"):
         self.folder = Path(folder)
         self.api_key = api_key
         self.sender = sender
@@ -271,6 +274,12 @@ class Runner:
         self.log_sizes = tuple(int(n) for n in log_sizes) if log_sizes else BRIDGE_LOG_SIZES
         self.data_use = {}  # path -> [bytes, reads] since the last save
         self._pool_seen = {}  # id(connection pool) -> (connections, requests) already saved
+        self.ctx = None  # the bridge's shared context (names of places and goods), from its first poll
+        self.my_alerts = []
+        self.set_my_alerts_json(my_alerts)
+        self._my_alerts_due = time.monotonic() + FIRST_WIDGET_READ_SECONDS
+        self._spaceports_due = 0.0  # read once at the start, for the editor's list, then only while needed
+        self._fired = None  # loaded on first check
         self._data_use_due = time.monotonic() + DATA_USE_SAVE_SECONDS
 
     # ---- control, callable from the app's threads ----
@@ -300,6 +309,15 @@ class Runner:
     def set_update_every(self, seconds):
         """How often to look for a newer bridge on GitHub (the app: hourly on Wi-Fi, daily on mobile data)."""
         self.update_every = max(600, int(seconds or 0)) if seconds else 0
+
+    def set_my_alerts_json(self, text):
+        """The user's own alert rules (pocket_myalerts), as JSON; checked again within a minute."""
+        try:
+            rules = json.loads(text or "[]")
+        except ValueError:
+            rules = []
+        self.my_alerts = [r for r in rules if isinstance(r, dict) and r.get("kind") in pocket_myalerts.KINDS]
+        self._my_alerts_due = 0.0
 
     def is_off(self, check_id):
         return self.checks.get(check_id, 1) == 0
@@ -376,6 +394,7 @@ class Runner:
             runner._status()
             runner._widget()
             runner._calendar()
+            runner._check_my_alerts()
             runner.save_data_use()
             runner._maybe_update()
 
@@ -387,6 +406,8 @@ class Runner:
             sw.log(f"[Pocket] {len(runner.checks) - len(off)} checks on; off: {', '.join(off) or 'none'}")
 
         def safe_poll(watcher, when=""):
+            if runner.ctx is None:
+                runner.ctx = getattr(watcher, "ctx", None)
             if runner.is_off(type(watcher).__name__):
                 return
             return original_safe_poll(watcher, when)
@@ -570,6 +591,48 @@ class Runner:
                 self.sender.widget(json.dumps(summary))
         except Exception as err:  # the widget must never stop the bridge
             self.module.log(f"[Pocket] Couldn't build the widget data: {err!r}")
+        finally:
+            self._in_feed = False
+
+    def _check_my_alerts(self):
+        """Once a minute: the user's own alerts against the replies the checks already read (pocket_myalerts).
+        Posts the ones that crossed their line and writes each rule's current value for the app."""
+        now = time.monotonic()
+        if now < self._my_alerts_due or self._in_feed or self.module is None:
+            return
+        self._my_alerts_due = now + CALENDAR_EVERY_SECONDS
+        self._in_feed = True
+        try:
+            if self.api is not None and now >= self._spaceports_due and (
+                    self._spaceports_due == 0.0 or pocket_myalerts.needs_spaceports(self.my_alerts)):
+                read = getattr(self.api, "get_latest", None) or self.api.get
+                body = read(pocket_myalerts.SPACEPORTS_PATH)
+                if body is not None:
+                    self.tapped[pocket_myalerts.SPACEPORTS_PATH] = body
+                self._spaceports_due = now + pocket_myalerts.SPACEPORTS_EVERY_SECONDS
+            fired_file = self.folder / MY_ALERTS_FIRED_FILE
+            if self._fired is None:
+                try:
+                    self._fired = set(json.loads(fired_file.read_text(encoding="utf-8")))
+                except (OSError, ValueError, TypeError):
+                    self._fired = set()
+            before = set(self._fired)
+            names = pocket_myalerts.Names(self.tapped, self.module, self.ctx)
+            alerts, status = pocket_myalerts.check(self.my_alerts, self.tapped, self._me, int(time.time() * 1000),
+                                                   self._fired, names)
+            self._fired &= {str(r.get("id")) for r in self.my_alerts}  # deleted rules
+            if self._fired != before:
+                fired_file.write_text(json.dumps(sorted(self._fired)), encoding="utf-8")
+            (self.folder / MY_ALERTS_FILE).write_text(json.dumps(
+                {"status": status, "choices": pocket_myalerts.choices(self.tapped, names)}), encoding="utf-8")
+            for rule, title, body in alerts:
+                text = f"{title} | {body}"
+                self.module.log(text)
+                if hasattr(self.sender, "deliver"):
+                    self.sender.deliver("corp", "MY ALERTS", text, text, "urgent" if rule.get("loud") else "normal",
+                                        title, body, "", pocket_myalerts.KIND)
+        except Exception as err:  # the user's alerts must never stop the bridge
+            self.module.log(f"[Pocket] Couldn't check My alerts: {err!r}")
         finally:
             self._in_feed = False
 
