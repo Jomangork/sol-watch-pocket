@@ -76,7 +76,7 @@ class PureFunctions(unittest.TestCase):
 class NewFromTheBridge(unittest.TestCase):
     """A newer bridge's switches and kinds, before the app knows them (made-up bridge text)."""
     SOURCE = """
-# Our widgets: when one is built. Not urgent, so off unless settings.ini turns it on ([alerts] widget_posts = yes).
+# Our widgets (/industry surface.widgets): when one is built. Not urgent, so off unless settings.ini turns it on.
 WIDGET_POSTS = False
 ALERT_KINDS = {
     # Research
@@ -92,6 +92,7 @@ ALERT_KINDS = {
         module = types.ModuleType("newer_bridge")
         module.__file__ = str(folder / "newer_bridge.py")
         module.WIDGET_POSTS = False
+        module.IndustryWatcher = type("IndustryWatcher", (), {"path": "/industry"})
         module.ALERT_KINDS = {"research_done": ("Research finished", "normal"), "widget_built": ("A widget was built", "normal")}
         module.SETTINGS_SPEC = (("alerts", "widget_posts", "WIDGET_POSTS", "bool", None),
                                 ("alerts", "fleet_move_posts", "FLEET_MOVE_POSTS", "bool", None),
@@ -100,7 +101,22 @@ ALERT_KINDS = {
 
     def test_new_switches_are_offered_with_the_bridges_own_words(self):
         self.assertEqual(pocket_runner.bridge_options(self.module()), [{
-            "name": "widget_posts", "label": "Widget posts", "about": "Our widgets: when one is built.", "default": False}])
+            "name": "widget_posts", "label": "Widget posts", "about": "Our widgets: when one is built.", "default": False,
+            "check": "IndustryWatcher", "checkTitle": "Industry"}])  # it rides on the Industry check's reads
+
+    def test_a_new_check_starts_slow_and_never_runs_faster_than_5_minutes(self):
+        class RailNetworkWatcher:
+            """Rail lines anywhere in Sol.
+
+            Long details."""
+            path, interval, header = "/rails", 300, "RAIL NETWORK UPDATE"
+        found = pocket_runner.new_check(RailNetworkWatcher())
+        self.assertEqual(found, {"id": "RailNetworkWatcher", "title": "Rail network", "about": "Rail lines anywhere in Sol.",
+                                 "path": "/rails", "start": 1800})
+        self.assertIsNone(pocket_runner.new_check(type("IndustryWatcher", (), {})()))  # in the menu already
+        import pocket_checks
+        self.assertEqual(pocket_checks.clamp("RailNetworkWatcher", 15), 300)
+        self.assertEqual(pocket_checks.clamp("IndustryWatcher", 15), 15)
 
     def test_new_kinds_go_under_their_heading_marked_new(self):
         groups = {g["group"]: g["kinds"] for g in pocket_runner.alert_kinds(self.module())}

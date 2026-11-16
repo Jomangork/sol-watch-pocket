@@ -88,6 +88,8 @@ MIN_WHY = {
                      "15 seconds would use about 30 MB an hour.",
 }
 MIN_DEFAULT = 10
+NEW_CHECK_MIN = 300     # a check from a newer bridge: at most every 5 minutes until an app update measures it
+NEW_CHECK_START = 1800  # and every 30 minutes (or the bridge's own interval, if slower) until the user picks
 MAX_SECONDS = 86400
 PRESETS = ("recommended", "saver", "fast")
 
@@ -113,7 +115,9 @@ def clamp(check_id, seconds):
     if seconds <= 0:
         return 0
     row = next((r for r in CATALOG if r["id"] == check_id), None)
-    return max(row["min"] if row else MIN_DEFAULT, min(seconds, MAX_SECONDS))
+    # A check a newer bridge added (not in this menu yet) isn't measured: never faster than NEW_CHECK_MIN.
+    least = row["min"] if row else MIN_DEFAULT if check_id in POCKET_FEEDS else NEW_CHECK_MIN
+    return max(least, min(seconds, MAX_SECONDS))
 
 
 def catalog_json():

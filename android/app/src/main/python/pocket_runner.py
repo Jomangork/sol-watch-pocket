@@ -98,8 +98,18 @@ def _comment_above(source, constant):
     return " ".join(x for x in sentences if "settings.ini" not in x).strip()
 
 
+def _check_for_path(module, path):
+    """The Checks menu's check that reads this API path (its watcher's `path`), or None."""
+    for row in pocket_checks.CATALOG:
+        cls = getattr(module, row["id"], None)
+        if getattr(cls, "path", None) == path:
+            return row
+    return None
+
+
 def bridge_options(module):
-    """[{name, label, about, default}] for the on/off [alerts] switches this bridge has and the app doesn't know."""
+    """[{name, label, about, default, check, checkTitle}] for the on/off [alerts] switches this bridge has and the
+    app doesn't know. check: the menu's check whose reads it uses, when its description names the API path."""
     out = []
     for spec in getattr(module, "SETTINGS_SPEC", ()) or ():
         if not (isinstance(spec, tuple) and len(spec) >= 4):
@@ -109,8 +119,26 @@ def bridge_options(module):
             continue
         label = str(name)[:-len("_posts")].replace("_", " ").capitalize() + " posts"
         about = _comment_above(_source(module), constant)
-        out.append({"name": name, "label": label, "about": about, "default": bool(getattr(module, constant, False))})
+        path = re.search(r"\((/[a-z][a-z/_]*)", about)
+        row = _check_for_path(module, path.group(1)) if path else None
+        about = re.sub(r"\s*\(/[^)]*\)", "", about)  # "(/industry surface.rails)" is for the bridge's readers
+        out.append({"name": name, "label": label, "about": about, "default": bool(getattr(module, constant, False)),
+                    "check": row["id"] if row else "", "checkTitle": row["title"] if row else ""})
     return out
+
+
+def new_check(watcher):
+    """{id, title, about, path, start} for a bridge watcher the Checks menu doesn't list (a newer bridge's), or None."""
+    name = type(watcher).__name__
+    if name in pocket_checks.IDS or name.startswith("Lite"):
+        return None
+    header = str(getattr(watcher, "header", "") or "")
+    title = header.replace(" UPDATE", "").strip().capitalize() if header else \
+        re.sub(r"(?<!^)(?=[A-Z])", " ", name.removesuffix("Watcher")).capitalize()
+    doc = (type(watcher).__doc__ or "").strip().split("\n\n")[0]
+    interval = int(getattr(watcher, "interval", 0) or 0)
+    return {"id": name, "title": title, "about": " ".join(doc.split()), "path": str(getattr(watcher, "path", "") or ""),
+            "start": max(pocket_checks.NEW_CHECK_START, interval)}
 
 
 def _kind_headings(source):
@@ -365,6 +393,8 @@ class Runner:
         self._my_alerts_due = time.monotonic() + FIRST_WIDGET_READ_SECONDS
         self._spaceports_due = 0.0  # read once at the start, for the editor's list, then only while needed
         self._fired = None  # loaded on first check
+        self._options = []
+        self.new_checks = {}  # watcher class -> new_check() for the ones the menu doesn't list
         self._data_use_due = time.monotonic() + DATA_USE_SAVE_SECONDS
 
     # ---- control, callable from the app's threads ----
@@ -430,7 +460,8 @@ class Runner:
         self.module = module
         self._patch(module)
         (self.folder / ALERT_KINDS_FILE).write_text(json.dumps(alert_kinds(module)), encoding="utf-8")
-        (self.folder / BRIDGE_OPTIONS_FILE).write_text(json.dumps(bridge_options(module)), encoding="utf-8")
+        self._options = bridge_options(module)
+        self._write_bridge_options()
         return module
 
     def _apply_checks(self):
@@ -494,6 +525,8 @@ class Runner:
         def safe_poll(watcher, when=""):
             if runner.ctx is None:
                 runner.ctx = getattr(watcher, "ctx", None)
+            if type(watcher).__name__ not in runner.new_checks:
+                runner._spot_new_check(watcher)
             if runner.is_off(type(watcher).__name__):
                 return
             return original_safe_poll(watcher, when)
@@ -679,6 +712,29 @@ class Runner:
             self.module.log(f"[Pocket] Couldn't build the widget data: {err!r}")
         finally:
             self._in_feed = False
+
+    def _write_bridge_options(self):
+        """bridge_options.json: a newer bridge's switches and checks the app doesn't know, for "New from the bridge"."""
+        try:
+            (self.folder / BRIDGE_OPTIONS_FILE).write_text(json.dumps(
+                {"version": getattr(self.module, "VERSION", ""), "options": self._options,
+                 "checks": [c for c in self.new_checks.values() if c]}), encoding="utf-8")
+        except OSError as err:
+            self.module.log(f"[Pocket] Couldn't list what's new from the bridge: {err!r}")
+
+    def _spot_new_check(self, watcher):
+        """A watcher the menu doesn't list: it runs at NEW_CHECK_START (or slower) until the user picks."""
+        name = type(watcher).__name__
+        found = new_check(watcher)
+        self.new_checks[name] = found
+        if not found:
+            return
+        if name not in self.checks:
+            self.checks[name] = found["start"]
+            type(watcher).interval = found["start"]
+        self.module.log(f"[Pocket] New check from the bridge: {found['title']} ({found['path'] or name}), "
+                        f"every {self.checks[name] // 60} min")
+        self._write_bridge_options()
 
     def _check_my_alerts(self):
         """Once a minute: the user's own alerts against the replies the checks already read (pocket_myalerts).

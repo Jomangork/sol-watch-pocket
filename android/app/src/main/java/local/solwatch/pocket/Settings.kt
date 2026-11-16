@@ -75,8 +75,9 @@ object Settings {
     fun activeSet(context: Context, metered: Boolean) =
         if (metered && separateMobile(context)) MOBILE else WIFI
 
+    /** The menu's intervals for Wi-Fi or mobile data, and a newer bridge's checks (NewOptions) on both. */
     fun activeIntervalsJson(context: Context, metered: Boolean): String =
-        JSONObject(intervals(context, activeSet(context, metered))).toString()
+        JSONObject(intervals(context, activeSet(context, metered)) + NewOptions.checkIntervals(context)).toString()
 
     // ---- look ----
 

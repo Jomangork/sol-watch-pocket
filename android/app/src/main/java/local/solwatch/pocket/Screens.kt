@@ -250,6 +250,7 @@ fun ChecksScreen(modifier: Modifier) {
                 }
             }
         }
+        item { NewOptionsCard(intervals) { id, seconds -> change(intervals + (id to seconds)) } }
         for (group in Catalog.groups) {
             item(key = "group-$group") {
                 Text(group, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
@@ -261,7 +262,6 @@ fun ChecksScreen(modifier: Modifier) {
             }
         }
         item { FleetFlightsCard() }
-        item { NewOptionsCard() }
         item {
             Text(
                 "Data figures assume every read finds something changed, measured on 13 Nov 2026. " +

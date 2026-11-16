@@ -52,7 +52,7 @@ class BridgeService : Service() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var updateChecker: Thread? = null
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key != null && key.startsWith("checks_") || key == "separate_mobile") applyChecks()
+        if (key != null && key.startsWith("checks_") || key == "separate_mobile" || key == "new_checks") applyChecks()
         if (key == MyAlerts.SETTING) applyMyAlerts()
     }
 

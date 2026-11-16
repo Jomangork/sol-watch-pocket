@@ -12,6 +12,7 @@ class PocketApp : Application() {
         if (CrashReport.isCrashProcess()) return  // the report screen needs nothing else
         if (!Python.isStarted()) Python.start(AndroidPlatform(this))
         runCatching { Settings.moveOldFast(this) }
+        NewOptions.resetAfterUpdate(this)
         TimeText.load(this)
         Notifier.createChannels(this)
         AppUpdater.createChannel(this)
