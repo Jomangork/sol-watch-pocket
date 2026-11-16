@@ -76,8 +76,7 @@ import java.io.File
 import java.text.DateFormat
 import java.util.Date
 
-private fun shortTime(epochSeconds: Long): String =
-    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(epochSeconds * 1000))
+private fun shortTime(epochSeconds: Long): String = TimeText.dateTime(epochSeconds * 1000)
 
 private fun styled(text: String): AnnotatedString = buildAnnotatedString {
     for ((run, bold) in boldRuns(readableTimes(text, ::shortTime))) {
@@ -484,6 +483,7 @@ fun StatusScreen(modifier: Modifier) {
                 )
             }
         }
+        QuietHoursCard()
         ReportCard()
         StorageCard(tick, running = status.running)
         UsageCard(tick)

@@ -60,7 +60,10 @@ data class MyAlertRule(
 )
 
 data class MyAlertStatus(val now: String, val met: Boolean, val title: String)
-data class MyAlertChoice(val label: String, val place: String = "", val good: String = "", val region: String = "", val spaceport: String = "")
+data class MyAlertChoice(
+    val label: String, val place: String = "", val good: String = "", val region: String = "", val spaceport: String = "",
+    val goodName: String = "", val placeName: String = "", val where: String = "", val now: String = "",
+)
 
 /**
  * The user's own thresholds: kept in the app's settings, handed to the bridge's runner, which checks them once a
@@ -128,7 +131,10 @@ object MyAlerts {
             val array = choices.getJSONArray(list)
             (0 until array.length()).map { i ->
                 val c = array.getJSONObject(i)
-                MyAlertChoice(c.optString("label"), c.optString("place"), c.optString("good"), c.optString("region"), c.optString("spaceport"))
+                MyAlertChoice(
+                    c.optString("label"), c.optString("place"), c.optString("good"), c.optString("region"), c.optString("spaceport"),
+                    c.optString("goodName"), c.optString("placeName"), c.optString("where"), c.optString("now"),
+                )
             }
         }
     }.getOrDefault(emptyMap<String, MyAlertStatus>() to emptyMap())
@@ -253,6 +259,10 @@ private fun MyAlertEditor(
                 if (options.isEmpty()) {
                     Text("Nothing to pick yet: the list fills in after that check's next read while Sol Watch runs.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                } else if (kind.pick == "stock" || kind.pick == "market") {
+                    GoodThenWhere(options, picked, market = kind.pick == "market") { option ->
+                        rule = rule.copy(place = option.place, good = option.good, region = option.region, spaceport = option.spaceport)
+                    }
                 } else {
                     var open by remember { mutableStateOf(false) }
                     Box {
@@ -289,6 +299,56 @@ private fun MyAlertEditor(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(enabled = ready, onClick = { onSave(rule.copy(value = (number ?: 0.0) * kind.scale)) }) { Text("Save") }
                 if (!isNew) OutlinedButton(onClick = onDelete) { Text("Delete") }
+            }
+        }
+    }
+}
+
+/**
+ * Stock and market alerts: the good first (typed, with the matching goods listed), then where it is (a body, or a
+ * continent on Earth), then the place, listing only places holding that good or markets trading it.
+ */
+@Composable
+private fun GoodThenWhere(options: List<MyAlertChoice>, picked: MyAlertChoice?, market: Boolean, onPick: (MyAlertChoice) -> Unit) {
+    var good by remember { mutableStateOf(picked?.good.orEmpty()) }
+    var typed by remember { mutableStateOf(picked?.goodName.orEmpty()) }
+    var where by remember { mutableStateOf("") }
+    val goods = options.groupBy { it.good }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = typed, onValueChange = { typed = it; if (goods[good]?.first()?.goodName != it) good = "" },
+            singleLine = true, label = { Text("Good (type to narrow it down)") }, modifier = Modifier.fillMaxWidth(),
+        )
+        if (good.isEmpty()) {
+            val hits = goods.values.map { it.first() }.filter { it.goodName.contains(typed.trim(), ignoreCase = true) }.sortedBy { it.goodName }
+            for (hit in hits.take(6)) {
+                val count = goods[hit.good]?.size ?: 0
+                OutlinedButton(onClick = { good = hit.good; typed = hit.goodName; where = "" }, modifier = Modifier.fillMaxWidth()) {
+                    Text(hit.goodName, Modifier.weight(1f))
+                    Text(if (count == 1) "1 place" else "$count places", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            if (hits.size > 6) Text("${hits.size - 6} more: keep typing", style = MaterialTheme.typography.bodySmall)
+            if (hits.isEmpty()) Text("No good matches that", style = MaterialTheme.typography.bodySmall)
+        } else {
+            val places = goods[good].orEmpty()
+            val areas = places.map { it.where }.distinct().sorted()
+            Text(if (market) "Where: continent" else "Where: body", style = MaterialTheme.typography.labelMedium)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (area in listOf("") + areas) {
+                    FilterChip(selected = where == area, onClick = { where = area }, label = { Text(area.ifBlank { "All" }) })
+                }
+            }
+            Text(if (market) "Region" else "Place", style = MaterialTheme.typography.labelMedium)
+            for (option in places.filter { where.isBlank() || it.where == where }.sortedBy { it.placeName }) {
+                val on = picked == option
+                OutlinedButton(onClick = { onPick(option) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        (if (on) "✓ " else "") + option.placeName + if (where.isBlank()) " · ${option.where}" else "",
+                        Modifier.weight(1f), fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                    Text(option.now, style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
     }

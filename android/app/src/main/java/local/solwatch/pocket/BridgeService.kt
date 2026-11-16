@@ -289,7 +289,7 @@ class BridgeService : Service() {
             publish(status)
             Settings.prefs(context).edit().putLong(LAST_POLL_AT, status.lastPollAt).apply()
             WidgetUpdater.request(context)
-            val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(status.lastPollAt))
+            val time = TimeText.time(status.lastPollAt)
             runCatching {
                 NotificationManagerCompat.from(context).notify(
                     Notifier.SERVICE_ID,

@@ -192,7 +192,7 @@ private fun PocketHeader() {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.size(8.dp).clip(CircleShape).background(state.color))
                 Text(
-                    label,
+                    label + if (QuietHours.active(context)) " · 🌙 quiet until ${TimeText.minutes(Settings.quietTo(context))}" else "",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

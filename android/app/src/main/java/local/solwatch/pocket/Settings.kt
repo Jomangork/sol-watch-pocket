@@ -124,6 +124,25 @@ object Settings {
         .mapNotNull { (key, value) -> (value as? String)?.let { key.removePrefix("kind_") to it } }
         .toMap()
 
+    /** Clock for times shown in the app: TimeText.PHONE, H24 or H12. */
+    fun clock(context: Context) = prefs(context).getString("clock", TimeText.PHONE) ?: TimeText.PHONE
+
+    fun setClock(context: Context, mode: String) {
+        prefs(context).edit().putString("clock", mode).apply()
+        TimeText.load(context)
+    }
+
+    // Quiet hours: alerts make no sound between two times of day (minutes after midnight), on the chosen days.
+    fun quietOn(context: Context) = prefs(context).getBoolean("quiet_on", false)
+    fun quietFrom(context: Context) = prefs(context).getInt("quiet_from", 22 * 60)
+    fun quietTo(context: Context) = prefs(context).getInt("quiet_to", 7 * 60)
+    fun quietDays(context: Context) = prefs(context).getString("quiet_days", QuietHours.EVERY) ?: QuietHours.EVERY
+    fun quietUrgent(context: Context) = prefs(context).getBoolean("quiet_urgent", true)
+
+    fun setQuiet(context: Context, on: Boolean, from: Int, to: Int, days: String, urgent: Boolean) =
+        prefs(context).edit().putBoolean("quiet_on", on).putInt("quiet_from", from).putInt("quiet_to", to)
+            .putString("quiet_days", days).putBoolean("quiet_urgent", urgent).apply()
+
     fun enabled(context: Context) = prefs(context).getBoolean(ENABLED, false)
 
     fun setEnabled(context: Context, on: Boolean) = prefs(context).edit().putBoolean(ENABLED, on).apply()

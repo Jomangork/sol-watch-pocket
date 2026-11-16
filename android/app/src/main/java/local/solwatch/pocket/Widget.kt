@@ -189,7 +189,7 @@ private fun WidgetBody(
     val recentLines = if (spare >= 40f) minOf(recent.size, ((spare - 20f) / 16f).toInt()) else 0
     val checked = (status.lastPollAt.takeIf { it > 0 } ?: Settings.prefs(context).getLong(BridgeService.LAST_POLL_AT, 0))
         .takeIf { it > 0 }
-        ?.let { DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it)) }
+        ?.let { TimeText.time(it) }
     Column(
         GlanceModifier.fillMaxSize().background(c(PocketColors.night)).cornerRadius(20.dp).padding(12.dp)
             .clickable(actionStartActivity<MainActivity>()),

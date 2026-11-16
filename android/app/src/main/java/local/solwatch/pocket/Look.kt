@@ -147,7 +147,7 @@ fun health(context: Context, status: BridgeStatus): Pair<Health, String> {
         status.keyRejected || prefs.getBoolean(BridgeService.KEY_REJECTED, false) -> Health.DOWN to "API key rejected"
         status.outageSince > 0 && now - status.outageSince >= OUTAGE_SHOWN_MS ->
             Health.WARN to "Game server not answering since ${
-                java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(status.outageSince))
+                TimeText.time(status.outageSince)
             }"
         lastPoll > 0 && now - lastPoll > STALE_MS -> Health.WARN to "No check for ${(now - lastPoll) / 60000} min"
         // A warning raised before the app last updated is about the old version: dropped.

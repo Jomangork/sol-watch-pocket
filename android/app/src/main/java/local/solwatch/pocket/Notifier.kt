@@ -121,7 +121,8 @@ object Notifier {
             builder.setContentText(body.lines().joinToString(" "))
                 .setStyle(NotificationCompat.BigTextStyle().bigText(body))
         }
-        // No setSilent here: the channel decides, so a sound chosen in Android's settings plays.
+        // Otherwise no setSilent: the channel decides, so a sound chosen in Android's settings plays.
+        if (QuietHours.silences(context, priority)) builder.setSilent(true)
         when {
             priority == "urgent" -> builder.setPriority(NotificationCompat.PRIORITY_HIGH).setCategory(NotificationCompat.CATEGORY_ALARM)
             QUIET.any { it.first == androidChannel } -> builder.setPriority(NotificationCompat.PRIORITY_LOW)

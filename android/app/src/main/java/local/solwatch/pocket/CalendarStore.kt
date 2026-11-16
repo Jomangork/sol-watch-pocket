@@ -169,5 +169,5 @@ object DateText {
     fun day(ms: Long): String =
         java.text.SimpleDateFormat("EEE d MMM", java.util.Locale.getDefault()).format(java.util.Date(ms))
 
-    fun time(ms: Long): String = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(ms))
+    fun time(ms: Long): String = TimeText.time(ms)
 }

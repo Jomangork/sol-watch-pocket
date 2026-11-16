@@ -55,6 +55,16 @@ class Names:
                 pass
         return pocket_calendar._name(place_id, self.tapped)
 
+    def where(self, place_id):
+        """The broad part of a place for the editor: its body ("Moon"), or its continent on Earth ("South America")."""
+        rows = (self.tapped.get("/reference/places") or {}).get("places") or ()
+        row = next((r for r in rows if isinstance(r, dict) and r.get("id") == place_id), None) or {}
+        continent = row.get("continent")
+        if isinstance(continent, str) and continent and (row.get("bodyId") in (None, "earth")):
+            return continent.replace("_", " ").title()
+        body = row.get("bodyId") or (str(place_id).split("/", 1)[0] if place_id else "")
+        return pocket_glance._name(body, None, self.tapped.get("/reference/bodies")) if body else "Elsewhere"
+
     def good(self, good_id):
         names = (self.ctx or {}).get("good_names") if isinstance(self.ctx, dict) else None
         if isinstance(names, dict) and names.get(good_id):
@@ -193,15 +203,33 @@ def needs_spaceports(rules):
     return any(r.get("on", True) and r.get("kind") == "spaceport_wait" for r in rules)
 
 
+def _stock_now(stock, hours_per_game_day):
+    qty, rate = _num(stock.get("qty")) or 0, _num(stock.get("rate")) or 0
+    return f"{qty:,.1f} held, not falling" if rate >= 0 else f"runs out in {hours_text(qty / -rate * hours_per_game_day)}"
+
+
 def choices(tapped, names):
-    """What the editor offers: our stocks, places with crew, Earth's markets and the spaceports (once read)."""
-    stock = sorted({(s.get("regionId"), s.get("goodId")) for s in _stocks(tapped) if s.get("regionId") and s.get("goodId")})
+    """What the editor offers: our stocks, places with crew, Earth's markets and the spaceports (once read).
+    Stock and market entries carry the good, the place, where it is (body, or continent on Earth) and its value now,
+    so the editor can ask for the good first, then where, and list only what matches."""
+    _, scale = _game_now(tapped, None, 0)
+    hours_per_game_day = 24.0 / scale
+    stock = {(s.get("regionId"), s.get("goodId")): s for s in _stocks(tapped) if s.get("regionId") and s.get("goodId")}
     supplies = sorted({p.get("placeId") for p in _supplies(tapped) if p.get("placeId")})
-    markets = sorted({(m.get("regionId"), m.get("goodId")) for m in _markets(tapped) if m.get("regionId") and m.get("goodId")})
+    markets = {(m.get("regionId"), m.get("goodId")): m for m in _markets(tapped) if m.get("regionId") and m.get("goodId")}
+
+    def market_now(m):
+        stock_, target = _num(m.get("stock")), _num(m.get("target"))
+        return f"{stock_ / target * 100:.0f}% of target" if stock_ is not None and target else ""
+
     return {
-        "stock": [{"place": p, "good": g, "label": f"{names.good(g)} at {names.place(p)}"} for p, g in stock],
+        "stock": [{"place": p, "good": g, "goodName": names.good(g), "placeName": names.place(p), "where": names.where(p),
+                   "now": _stock_now(row, hours_per_game_day), "label": f"{names.good(g)} at {names.place(p)}"}
+                  for (p, g), row in sorted(stock.items())],
         "supplies": [{"place": p, "label": names.place(p)} for p in supplies],
-        "market": [{"region": r, "good": g, "label": f"{names.good(g)} in {names.place(r)}"} for r, g in markets],
+        "market": [{"region": r, "good": g, "goodName": names.good(g), "placeName": names.place(r), "where": names.where(r),
+                    "now": market_now(row), "label": f"{names.good(g)} in {names.place(r)}"}
+                   for (r, g), row in sorted(markets.items())],
         "spaceport": [{"spaceport": p.get("regionId"), "label": p.get("spaceport") or names.place(p.get("regionId"))}
                       for p in _ports(tapped) if p.get("regionId")],
     }

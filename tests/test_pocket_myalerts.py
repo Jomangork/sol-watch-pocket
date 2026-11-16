@@ -95,10 +95,18 @@ class MyAlerts(unittest.TestCase):
         self.assertEqual(status["w"]["now"], "Now 5.0 held, not falling")
 
     def test_choices_for_the_editor(self):
-        found = pocket_myalerts.choices(tapped(), NAMES)
+        places = {"places": [{"id": "tros", "bodyId": "moon", "name": "Tros"},
+                             {"id": "guiana", "bodyId": "earth", "continent": "south_america", "name": "Guiana"}]}
+        bodies = {"bodies": [{"id": "moon", "name": "Moon"}]}
+        data = tapped(**{"/reference/places": places, "/reference/bodies": bodies})
+        found = pocket_myalerts.choices(data, pocket_myalerts.Names(data))
         self.assertEqual([c["good"] for c in found["stock"]], ["steel", "water_ice"])
+        self.assertEqual((found["stock"][0]["where"], found["stock"][0]["placeName"]), ("Moon", "Tros"))
+        self.assertEqual(found["stock"][0]["now"], "runs out in 3.0 h")
+        self.assertEqual((found["market"][0]["where"], found["market"][0]["now"]), ("South America", "8% of target"))
         self.assertEqual(found["supplies"][0]["place"], "vesta_yard")
         self.assertEqual(found["spaceport"], [{"spaceport": "guiana", "label": "Kourou"}])
+        self.assertEqual(found["stock"][1]["now"], "5.0 held, not falling")
         self.assertTrue(pocket_myalerts.needs_spaceports([{"kind": "spaceport_wait"}]))
         self.assertFalse(pocket_myalerts.needs_spaceports([{"kind": "spaceport_wait", "on": False}]))
 
