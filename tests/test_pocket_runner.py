@@ -355,8 +355,8 @@ class WithBridge(unittest.TestCase):
         import json
         import requests
         response = requests.Response()
-        response.raw = io.BytesIO(b"x" * 500)
-        response.raw.read()
+        response.raw = types.SimpleNamespace(_fp_bytes_read=500, tell=lambda: 0)  # gzipped: tell() says 0
+        response._content = b"x" * 4000  # the unzipped body, which isn't what came over the network
         response.headers["ETag"] = "abc"
         request = requests.Request("GET", self.sw.API_BASE + "/industry", params={"a": 1}).prepare()
         self.runner._count(request, response)
@@ -368,6 +368,8 @@ class WithBridge(unittest.TestCase):
         size, reads = saved["paths"]["/industry"]
         self.assertEqual(reads, 3)
         self.assertGreater(size, 3 * 500)
+        self.assertLess(size, 3 * 4000)
+        self.assertEqual(saved["v"], pocket_runner.DATA_USE_VERSION)
 
     def test_new_connections_are_counted_per_host(self):
         import json

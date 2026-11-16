@@ -73,6 +73,7 @@ STATUS_EVERY_SECONDS = 15
 CALENDAR_EVERY_SECONDS = 60  # the app also checks calendar reminders each time
 DATA_USE_FILE = "data_use.json"  # bytes each API path downloaded, kept across restarts (temporary measuring aid)
 DATA_USE_SAVE_SECONDS = 300
+DATA_USE_VERSION = 2  # 2 (0.8.8): bodies counted too; earlier files counted only headers for gzipped replies
 # The bridge's own log sizes: (bridge.log MB, old copies, errors.log MB, old copies). The app's Storage card
 # picks others; the wrapper then sets up the bridge's logs itself.
 BRIDGE_LOG_SIZES = (5, 5, 2, 3)
@@ -575,7 +576,12 @@ class Runner:
     def _count(self, request, response):
         """Bytes one read cost: the compressed body as it came over the network, plus headers both ways."""
         raw = getattr(response, "raw", None)
-        body = raw.tell() if raw is not None and hasattr(raw, "tell") else len(response.content or b"")
+        # urllib3 counts the bytes it read off the network in _fp_bytes_read. Its tell() says 0 for a gzipped reply
+        # (most of the game's), which made 0.8.0-0.8.7 count headers only.
+        body = getattr(raw, "_fp_bytes_read", None)
+        if not isinstance(body, int) or (body == 0 and response.content):
+            length = response.headers.get("Content-Length")
+            body = int(length) if length and length.isdigit() else len(response.content or b"")
         headers = sum(len(k) + len(v) + 4 for k, v in response.headers.items())
         headers += sum(len(k) + len(v) + 4 for k, v in request.headers.items()) + len(request.url) + 40
         url = request.url.split("?", 1)[0]
@@ -600,6 +606,8 @@ class Runner:
             saved = json.loads(file.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             saved = {}
+        if saved.get("v") != DATA_USE_VERSION:  # counted the old way (headers only): start again
+            saved = {}
         paths = saved.get("paths") if isinstance(saved.get("paths"), dict) else {}
         for path, (size, reads) in counts.items():
             old = paths.get(path) or [0, 0]
@@ -608,8 +616,9 @@ class Runner:
         for host, (made, used) in opened.items():
             old = hosts.get(host) or [0, 0]
             hosts[host] = [old[0] + made, old[1] + used]
-        file.write_text(json.dumps({"since": saved.get("since") or int(time.time()), "paths": paths,
-                                    "names": self._path_names(), "connections": hosts}), encoding="utf-8")
+        file.write_text(json.dumps({"v": DATA_USE_VERSION, "since": saved.get("since") or int(time.time()),
+                                    "paths": paths, "names": self._path_names(), "connections": hosts}),
+                        encoding="utf-8")
 
     def _new_connections(self):
         """{host: [connections opened, requests sent]} since the last save, from the bridge's connection pools.
