@@ -94,6 +94,17 @@ class MyAlerts(unittest.TestCase):
         self.assertEqual(alerts, [])
         self.assertEqual(status["w"]["now"], "Now 5.0 held, not falling")
 
+    def test_supplies_that_arent_running_down(self):
+        company = {"sustainment": [{"placeId": "tros", "crew": 40, "supplies": {"held": 5108.0, "madePerDay": 60.0,
+                                                                              "drawPerDay": 12.0, "netDaysLeft": None}},
+                                   {"placeId": "depot", "crew": 0, "supplies": {}}]}
+        rules = [{"id": "t", "kind": "supplies_hours", "value": 24, "place": "tros"},
+                 {"id": "d", "kind": "supplies_hours", "value": 24, "place": "depot"}]
+        alerts, status, _ = check(rules, data=tapped(**{"/company": company}))
+        self.assertEqual(alerts, [])
+        self.assertEqual(status["t"]["now"], "Not running down (5,108 held, +48 a day)")
+        self.assertEqual(status["d"]["now"], "No crew there now")
+
     def test_choices_for_the_editor(self):
         places = {"places": [{"id": "tros", "bodyId": "moon", "name": "Tros"},
                              {"id": "guiana", "bodyId": "earth", "continent": "south_america", "name": "Guiana"}]}

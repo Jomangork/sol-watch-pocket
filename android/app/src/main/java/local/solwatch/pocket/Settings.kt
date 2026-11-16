@@ -46,6 +46,26 @@ object Settings {
         prefs(context).edit().putString("checks_$set", JSONObject(values).toString()).apply()
     }
 
+    /** The Fast preset as it was in 0.8.6-0.9.2, before its big downloads were slowed. */
+    val OLD_FAST = mapOf(
+        "FleetMapWatcher" to 15, "FleetsWatcher" to 30, "CraftWatcher" to 15, "DefenseWatcher" to 60, "NewsWatcher" to 60,
+        "SegmentsWatcher" to 60, "CompanyWatcher" to 60, "IndustryWatcher" to 60, "ResearchWatcher" to 60, "MiningWatcher" to 60,
+        "OreBodiesWatcher" to 60, "PocketWidget" to 60, "AccountWatcher" to 300, "MarketWatcher" to 3600, "RecordsWatcher" to 300,
+        "ContractsWatcher" to 60, "ContractHistoryWatcher" to 60, "DiplomacyWatcher" to 60, "FactionsWatcher" to 60,
+        "PadGoalWatcher" to 60, "AllianceWatcher" to 60, "DiscoveriesWatcher" to 60, "ChatWatcher" to 15, "DerelictWatcher" to 600,
+        "PlaceWatcher" to 600, "BridgeUpdateWatcher" to 600, "ApiSpecWatcher" to 600, "GameUpdateWatcher" to 300,
+    )
+
+    /** Once (0.9.3): a set still exactly on the old Fast preset moves to the new one; a set changed by hand stays. */
+    fun moveOldFast(context: Context) {
+        if (prefs(context).getBoolean("fast_093", false)) return
+        for (set in listOf(WIFI, MOBILE)) {
+            val stored = prefs(context).getString("checks_$set", null)?.let { JSONObject(it) } ?: continue
+            if (OLD_FAST.all { (id, seconds) -> stored.optInt(id, -1) == seconds }) saveIntervals(context, set, Catalog.preset("fast"))
+        }
+        prefs(context).edit().putBoolean("fast_093", true).apply()
+    }
+
     fun separateMobile(context: Context) = prefs(context).getBoolean(SEPARATE_MOBILE, false)
 
     fun setSeparateMobile(context: Context, on: Boolean) =

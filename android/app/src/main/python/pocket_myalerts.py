@@ -133,10 +133,19 @@ def reading(rule, tapped, me, now_ms, names):
     if kind == "supplies_hours":
         place = rule.get("place")
         title = f"{names.place(place)} supplies within {hours_text(line)}"
-        row = next((p for p in _supplies(tapped) if p.get("placeId") == place), None)
-        days = _num((row or {}).get("supplies", {}).get("netDaysLeft")) if row else None
+        rows = [p for p in (tapped.get("/company") or {}).get("sustainment") or () if isinstance(p, dict)]
+        row = next((p for p in rows if p.get("placeId") == place), None)
+        supplies = (row or {}).get("supplies") if isinstance((row or {}).get("supplies"), dict) else {}
+        days = _num(supplies.get("netDaysLeft"))
         if days is None:
-            return None if not tapped.get("/company") else (None, False, "No crew supplies counted there now", title)
+            if not tapped.get("/company"):
+                return None
+            if not row or not row.get("crew"):
+                return None, False, "No crew there now", title
+            held, made, drawn = (_num(supplies.get(k)) for k in ("held", "madePerDay", "drawPerDay"))
+            net = (made or 0) - (drawn or 0) if made is not None or drawn is not None else None
+            gain = f", {net:+,.0f} a day" if net is not None else ""
+            return None, False, f"Not running down ({held:,.0f} held{gain})" if held is not None else "Not running down", title
         hours = days * hours_per_game_day
         return hours, hours < line, f"Now {hours_text(hours)} left", title
     if kind == "research_minutes":
