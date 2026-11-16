@@ -93,14 +93,14 @@ fun QuietHoursCard() {
                         Triple("From", from) { v: Int -> from = v },
                         Triple("Until", to) { v: Int -> to = v },
                     )) {
-                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        // The time on its own line and the buttons under it, so "11:00 PM" fits as well as "23:00".
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(TimeText.minutes(value), fontFamily = FontFamily.Monospace, fontSize = 20.sp,
+                                color = MaterialTheme.colorScheme.primary, maxLines = 1)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedButton(onClick = { set((value + 1440 - 30) % 1440); save() }) { Text("−") }
-                                Text(
-                                    TimeText.minutes(value), Modifier.padding(horizontal = 6.dp),
-                                    fontFamily = FontFamily.Monospace, fontSize = 18.sp, color = MaterialTheme.colorScheme.primary,
-                                )
                                 OutlinedButton(onClick = { set((value + 30) % 1440); save() }) { Text("+") }
                             }
                         }

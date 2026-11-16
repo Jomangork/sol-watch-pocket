@@ -371,6 +371,18 @@ class WithBridge(unittest.TestCase):
         self.assertLess(size, 3 * 4000)
         self.assertEqual(saved["v"], pocket_runner.DATA_USE_VERSION)
 
+    def test_chunked_gzipped_replies_count_their_packed_size(self):
+        import json
+        import requests
+        response = requests.Response()
+        response.raw = types.SimpleNamespace(_fp_bytes_read=0)  # urllib3 doesn't count chunked bodies
+        response._content = json.dumps([{"good": "steel", "qty": i} for i in range(2000)]).encode()
+        response.headers["Content-Encoding"] = "gzip"
+        request = requests.Request("GET", self.sw.API_BASE + "/industry").prepare()
+        self.runner._count(request, response)
+        size = self.runner.data_use["/industry"][0]
+        self.assertLess(size, len(response._content) / 3)  # far below the unpacked size
+
     def test_new_connections_are_counted_per_host(self):
         import json
         pool = types.SimpleNamespace(host="solthegame.com", num_connections=3, num_requests=10)

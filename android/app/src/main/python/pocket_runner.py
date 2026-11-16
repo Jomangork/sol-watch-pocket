@@ -17,6 +17,7 @@ import re
 import sys
 import threading
 import time
+import zlib
 from pathlib import Path
 
 import pocket_calendar
@@ -76,7 +77,7 @@ MY_ALERTS_FILE = "my_alerts.json"  # each rule's current value and the editor's 
 MY_ALERTS_FIRED_FILE = "my_alerts_fired.json"  # rules already posted, so a restart doesn't post them again
 DATA_USE_FILE = "data_use.json"  # bytes each API path downloaded, kept across restarts (temporary measuring aid)
 DATA_USE_SAVE_SECONDS = 300
-DATA_USE_VERSION = 2  # 2 (0.8.8): bodies counted too; earlier files counted only headers for gzipped replies
+DATA_USE_VERSION = 3  # 3 (0.9.2): chunked gzipped replies at their packed size; 2 counted them unpacked
 # The bridge's own log sizes: (bridge.log MB, old copies, errors.log MB, old copies). The app's Storage card
 # picks others; the wrapper then sets up the bridge's logs itself.
 BRIDGE_LOG_SIZES = (5, 5, 2, 3)
@@ -640,11 +641,19 @@ class Runner:
         """Bytes one read cost: the compressed body as it came over the network, plus headers both ways."""
         raw = getattr(response, "raw", None)
         # urllib3 counts the bytes it read off the network in _fp_bytes_read. Its tell() says 0 for a gzipped reply
-        # (most of the game's), which made 0.8.0-0.8.7 count headers only.
+        # (most of the game's), which made 0.8.0-0.8.7 count headers only. A chunked reply isn't counted there either,
+        # and has no Content-Length: compressing the body again gives about the size that came over the network
+        # (0.8.8-0.9.1 counted the unpacked size, 5-15 times too much).
         body = getattr(raw, "_fp_bytes_read", None)
         if not isinstance(body, int) or (body == 0 and response.content):
             length = response.headers.get("Content-Length")
-            body = int(length) if length and length.isdigit() else len(response.content or b"")
+            packed = response.headers.get("Content-Encoding", "").lower() in ("gzip", "deflate", "br")
+            if length and length.isdigit():
+                body = int(length)
+            elif packed and response.content:
+                body = len(zlib.compress(response.content, 6))
+            else:
+                body = len(response.content or b"")
         headers = sum(len(k) + len(v) + 4 for k, v in response.headers.items())
         headers += sum(len(k) + len(v) + 4 for k, v in request.headers.items()) + len(request.url) + 40
         url = request.url.split("?", 1)[0]
