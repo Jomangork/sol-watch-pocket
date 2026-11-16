@@ -116,6 +116,10 @@ class AlertStore private constructor(private val context: Context) :
             .use { if (it.moveToFirst()) it.getInt(0) else 0 }
     }
 
+    /** Whether any alert is filed under this tab and filter (the "New" filter shows only when it has some). */
+    fun hasSub(tab: String, sub: String): Boolean =
+        readableDatabase.rawQuery("SELECT 1 FROM alerts WHERE tab = ? AND sub = ? LIMIT 1", arrayOf(tab, sub)).use { it.moveToFirst() }
+
     /** How many alerts of each kind arrived since the given time. */
     fun countsByKind(sinceMs: Long): Map<String, Int> =
         readableDatabase.rawQuery(

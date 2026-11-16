@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.dp
 import org.json.JSONArray
 import java.io.File
 
-data class AlertKind(val id: String, val about: String, val priority: String)
+data class AlertKind(val id: String, val about: String, val priority: String, val isNew: Boolean = false)
 data class KindGroup(val name: String, val kinds: List<AlertKind>)
 
 /**
@@ -55,7 +55,7 @@ object AlertKinds {
             val kinds = group.getJSONArray("kinds")
             KindGroup(group.getString("group"), (0 until kinds.length()).map { j ->
                 val kind = kinds.getJSONObject(j)
-                AlertKind(kind.getString("id"), kind.optString("about"), kind.optString("priority", "normal"))
+                AlertKind(kind.getString("id"), kind.optString("about"), kind.optString("priority", "normal"), kind.optBoolean("new"))
             })
         }
     }
@@ -176,7 +176,7 @@ fun AlertTypesScreen(modifier: Modifier, onBack: (() -> Unit)? = null) {
                 Card(Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(kind.about)
+                            Text(kind.about + if (kind.isNew) "  · new" else "")
                             val seen = counts[kind.id] ?: 0
                             if (seen > 0) {
                                 Text(

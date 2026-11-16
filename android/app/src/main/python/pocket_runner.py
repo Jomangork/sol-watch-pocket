@@ -44,15 +44,91 @@ check_minutes = 60
 
 
 
-def settings_ini(fleet_flights=False, fleet_warning_minutes=30, elevator_trips=False):
+def settings_ini(fleet_flights=False, fleet_warning_minutes=30, elevator_trips=False, new_options="{}"):
     """settings.ini with the app's own choices: posts about our fleets' flights (bridge 1.07.14+) and our space
     elevator bookings (1.07.15+; an older bridge ignores both), and how many minutes before they land or arrive
     to remind (0: no reminder). Global chat is always relayed on the phone: bridge 1.09.00+ turns it off by default
-    for Discord, and the Chat check on the Checks tab decides whether chat is read at all."""
+    for Discord, and the Chat check on the Checks tab decides whether chat is read at all.
+    new_options: JSON {name: true/false} for [alerts] switches a newer bridge added (bridge_options), until the
+    app knows them properly. Names it already sets, or that aren't plain words, are ignored."""
+    try:
+        extra = {k: v for k, v in json.loads(new_options or "{}").items()
+                 if isinstance(k, str) and re.fullmatch(r"[a-z][a-z0-9_]*_posts", k) and k not in APP_OPTIONS}
+    except (ValueError, AttributeError):
+        extra = {}
     return BASE_SETTINGS + (f"\n[alerts]\nfleet_move_posts = {'yes' if fleet_flights else 'no'}\n"
                             f"elevator_trip_posts = {'yes' if elevator_trips else 'no'}\n"
                             f"fleet_arrival_warning_minutes = {max(0, min(1440, int(fleet_warning_minutes)))}\n"
-                            "global_chat_posts = yes\n")
+                            "global_chat_posts = yes\n"
+                            + "".join(f"{k} = {'yes' if v else 'no'}\n" for k, v in sorted(extra.items())))
+
+
+# [alerts] switches the app sets itself, and those every bridge up to 1.09.00 had. A newer bridge's other on/off
+# "*_posts" switches are offered in Settings › Checks as "New from the bridge" (bridge 1.10.00's rail_link_posts was
+# the first), so they can be tried before an app update knows them.
+APP_OPTIONS = ("fleet_move_posts", "elevator_trip_posts", "global_chat_posts")
+KNOWN_OPTIONS = APP_OPTIONS + ("game_update_posts", "new_place_posts")
+BRIDGE_OPTIONS_FILE = "bridge_options.json"
+
+
+def _source(module):
+    """The bridge's own text, when it's a .py file (a downloaded update; the bundled copy is compiled)."""
+    path = getattr(module, "__file__", "") or ""
+    if not path.endswith(".py"):
+        return ""
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _comment_above(source, constant):
+    """The comment lines just above `CONSTANT = …` in the bridge's source, as one sentence or more."""
+    lines = source.splitlines()
+    at = next((i for i, line in enumerate(lines) if line.startswith(f"{constant} =")), None)
+    if at is None:
+        return ""
+    found = []
+    for line in reversed(lines[:at]):
+        if not line.startswith("#"):
+            break
+        found.insert(0, line.lstrip("# ").rstrip())
+    # Sentences about settings.ini are for the desktop bridge: the app's switch is the setting here.
+    sentences = re.split(r"(?<=\.)\s+", " ".join(found))
+    return " ".join(x for x in sentences if "settings.ini" not in x).strip()
+
+
+def bridge_options(module):
+    """[{name, label, about, default}] for the on/off [alerts] switches this bridge has and the app doesn't know."""
+    out = []
+    for spec in getattr(module, "SETTINGS_SPEC", ()) or ():
+        if not (isinstance(spec, tuple) and len(spec) >= 4):
+            continue
+        section, name, constant, kind = spec[:4]
+        if section != "alerts" or kind != "bool" or not str(name).endswith("_posts") or name in KNOWN_OPTIONS:
+            continue
+        label = str(name)[:-len("_posts")].replace("_", " ").capitalize() + " posts"
+        about = _comment_above(_source(module), constant)
+        out.append({"name": name, "label": label, "about": about, "default": bool(getattr(module, constant, False))})
+    return out
+
+
+def _kind_headings(source):
+    """{kind: heading} from the comments in ALERT_KINDS, when the bridge's source is there."""
+    if "ALERT_KINDS = {" not in source:
+        return {}
+    block = source[source.index("ALERT_KINDS = {"):]
+    block = block[:block.find("\n}\n")]
+    headings, heading = {}, None
+    for line in block.splitlines()[1:]:
+        comment = re.match(r"\s+# (.+)", line)
+        if comment:
+            heading = comment.group(1).strip()
+            continue
+        kind = re.match(r'\s+"(\w+)":', line)
+        if kind and heading:
+            headings[kind.group(1)] = heading
+    return headings
 
 
 CHANNELS = ("corp", "general", "alliance")
@@ -160,15 +236,23 @@ def app_priority(line):
 
 
 def alert_kinds(module):
-    """The bridge's ALERT_KINDS as [{group, kinds: [{id, about, priority}]}], under pocket_kinds' headings
-    (kinds it doesn't list go under "Other"), leaving out the lite bridge's. [] for a bridge without labels."""
+    """The bridge's ALERT_KINDS as [{group, kinds: [{id, about, priority, new}]}], under pocket_kinds' headings,
+    leaving out the lite bridge's. A kind pocket_kinds doesn't list yet goes under its heading in the bridge's own
+    source when that's readable (a downloaded update), else under "Other", marked new. [] without labels."""
     kinds = getattr(module, "ALERT_KINDS", None)
     if not isinstance(kinds, dict):
         return []
+    headings = _kind_headings(_source(module))
+    known = {k for _, ids in pocket_kinds.GROUPS for k in ids}
+    extra = {}
+    for kind in kinds:
+        if kind not in known:
+            extra.setdefault(headings.get(kind, "Other"), []).append(kind)
     groups, placed = [], set()
-    for name, ids in pocket_kinds.GROUPS + (("Other", tuple(kinds)),):
-        listed = [{"id": k, "about": kinds[k][0], "priority": kinds[k][1]}
-                  for k in ids if k in kinds and k not in placed]
+    names = [name for name, _ in pocket_kinds.GROUPS]
+    for name, ids in pocket_kinds.GROUPS + tuple((h, ()) for h in extra if h not in names):
+        listed = [{"id": k, "about": kinds[k][0], "priority": kinds[k][1], "new": k not in known}
+                  for k in tuple(ids) + tuple(extra.get(name, ())) if k in kinds and k not in placed]
         placed.update(entry["id"] for entry in listed)
         if listed and name != LITE_GROUP:
             groups.append({"group": name, "kinds": listed})
@@ -346,6 +430,7 @@ class Runner:
         self.module = module
         self._patch(module)
         (self.folder / ALERT_KINDS_FILE).write_text(json.dumps(alert_kinds(module)), encoding="utf-8")
+        (self.folder / BRIDGE_OPTIONS_FILE).write_text(json.dumps(bridge_options(module)), encoding="utf-8")
         return module
 
     def _apply_checks(self):

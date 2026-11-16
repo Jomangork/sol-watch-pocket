@@ -23,6 +23,8 @@ It's a player-made tool, not made or supported by the game's developers.
 - **Report for Claude** (Settings › Status): one text file with status, settings, battery and data use, the errors log and the bridge log, to share or save in Downloads. The API key is never in it; alert and chat text only if you switch it on.
 - **Storage** (Settings › Status): the space used, how big the bridge's logs may grow, and how long alert history is kept.
 - **Status:** a green, yellow or red dot. Shows which sections your API key can read, plus the bridge's own log. When the game's server is down, the dot turns yellow and the log notes the outage once rather than every failed read.
+- **New from the bridge:** when a bridge update adds alerts the app doesn't know yet, their switches appear in Settings › Checks with the bridge's own description, and their alerts show under a "New" filter, until an app update places them.
+- **What's new** pops up once after each app update (and from Settings › Status › App updates).
 - **Bridge updates from GitHub,** optional and on by default, checked hourly on Wi-Fi and daily on mobile data. A new `sol_watch.py` is checked before it's used (newer, compiles, still has what the app hooks into), runs on trial, and is rolled back if it fails to start.
 - **App updates from this repository's releases,** checked hourly on Wi-Fi and daily on mobile data. The app tells you when a new version is out; tapping the notice downloads it in your browser, and opening the download installs it. The app doesn't install anything by itself: with that ability, Play Protect called it harmful.
 - **Sound for every alert,** a switch in Settings › Status, if you want to hear everything, not only urgent alerts and chat.

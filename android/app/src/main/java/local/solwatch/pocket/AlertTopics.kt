@@ -10,6 +10,7 @@ object AlertTopics {
     data class Tab(val name: String, val subs: List<Sub>)
 
     const val CHAT = "Chat"
+    const val NEW = "New"
 
     val TABS = listOf(
         Tab("Company", listOf(
@@ -87,7 +88,8 @@ object AlertTopics {
      */
     fun of(kind: String, channel: String, priority: String, heading: String? = null): Pair<String, String> {
         BY_KIND[kind]?.let { return it }
-        if (kind.isNotBlank()) return (BY_HEADING[heading] ?: "Sol") to ""
+        // A kind from a newer bridge: its group's tab, under a "New" filter until an app update places it.
+        if (kind.isNotBlank()) return (BY_HEADING[heading] ?: "Sol") to NEW
         return when {
             priority == "chat" -> CHAT to if (channel == "alliance") "Alliance" else "Global"
             channel == "general" -> "Contracts" to ""

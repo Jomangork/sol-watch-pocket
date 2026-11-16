@@ -73,6 +73,50 @@ class PureFunctions(unittest.TestCase):
         self.assertNotIn("VERSION", missing)
 
 
+class NewFromTheBridge(unittest.TestCase):
+    """A newer bridge's switches and kinds, before the app knows them (made-up bridge text)."""
+    SOURCE = """
+# Our widgets: when one is built. Not urgent, so off unless settings.ini turns it on ([alerts] widget_posts = yes).
+WIDGET_POSTS = False
+ALERT_KINDS = {
+    # Research
+    "research_done": ("Research finished", "normal"),
+    # Mining and industry
+    "widget_built": ("A widget was built", "normal"),
+}
+"""
+
+    def module(self):
+        folder = Path(tempfile.mkdtemp())
+        (folder / "newer_bridge.py").write_text(self.SOURCE, encoding="utf-8")
+        module = types.ModuleType("newer_bridge")
+        module.__file__ = str(folder / "newer_bridge.py")
+        module.WIDGET_POSTS = False
+        module.ALERT_KINDS = {"research_done": ("Research finished", "normal"), "widget_built": ("A widget was built", "normal")}
+        module.SETTINGS_SPEC = (("alerts", "widget_posts", "WIDGET_POSTS", "bool", None),
+                                ("alerts", "fleet_move_posts", "FLEET_MOVE_POSTS", "bool", None),
+                                ("alerts", "stall_repeat_hours", "STALL_REPEAT_HOURS", "float", (0, 168)))
+        return module
+
+    def test_new_switches_are_offered_with_the_bridges_own_words(self):
+        self.assertEqual(pocket_runner.bridge_options(self.module()), [{
+            "name": "widget_posts", "label": "Widget posts", "about": "Our widgets: when one is built.", "default": False}])
+
+    def test_new_kinds_go_under_their_heading_marked_new(self):
+        groups = {g["group"]: g["kinds"] for g in pocket_runner.alert_kinds(self.module())}
+        self.assertEqual(groups["Mining and industry"], [{"id": "widget_built", "about": "A widget was built",
+                                                          "priority": "normal", "new": True}])
+        self.assertFalse(groups["Research"][0]["new"])
+
+    def test_switches_reach_settings_ini_but_never_the_apps_own(self):
+        ini = pocket_runner.settings_ini(new_options=json.dumps({"widget_posts": True, "global_chat_posts": False,
+                                                                 "x = y\n[bridge]\nmode": True}))
+        self.assertIn("widget_posts = yes", ini)
+        self.assertIn("global_chat_posts = yes", ini)  # the app's own choice wins
+        self.assertNotIn("x = y", ini)  # a name that isn't a plain word is dropped
+        self.assertEqual(pocket_runner.settings_ini(new_options="not json"), pocket_runner.settings_ini())
+
+
 class WithBridge(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

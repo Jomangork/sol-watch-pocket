@@ -112,7 +112,10 @@ fun AlertsScreen(modifier: Modifier) {
                 FilterChip(selected = filter == id, onClick = { filter = id; sub = "" }, label = { Text(label) })
             }
         }
-        val subs = AlertTopics.subsOf(filter)
+        val hasNew by produceState(false, version, filter) {
+            value = withContext(Dispatchers.IO) { store.hasSub(filter, AlertTopics.NEW) }
+        }
+        val subs = AlertTopics.subsOf(filter) + if (hasNew) listOf(AlertTopics.NEW) else emptyList()
         if (subs.isNotEmpty()) {
             Row(
                 Modifier.horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
@@ -258,6 +261,7 @@ fun ChecksScreen(modifier: Modifier) {
             }
         }
         item { FleetFlightsCard() }
+        item { NewOptionsCard() }
         item {
             Text(
                 "Data figures assume every read finds something changed, measured on 13 Nov 2026. " +
@@ -690,8 +694,11 @@ private fun AppUpdateCard() {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            var showNotes by remember { mutableStateOf(false) }
+            if (showNotes) WhatsNewDialog(WhatsNew.current(context)) { showNotes = false }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { busy = true }, enabled = !busy) { Text(if (busy) "Checking…" else "Check now") }
+                TextButton(onClick = { showNotes = true }) { Text("What's new") }
                 available?.let { (version, url) ->
                     Button(onClick = { AppUpdater.openDownload(context, url) }) { Text("Download $version") }
                 }

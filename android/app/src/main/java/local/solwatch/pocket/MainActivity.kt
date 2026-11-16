@@ -37,6 +37,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -111,6 +112,9 @@ fun PocketScreens() {
             != PackageManager.PERMISSION_GRANTED
         ) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
+    // After an app update: what changed, once.
+    var whatsNew by remember { mutableStateOf(WhatsNew.pending(context)) }
+    if (whatsNew.isNotEmpty()) WhatsNewDialog(whatsNew) { whatsNew = emptyList() }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = { PocketHeader() },

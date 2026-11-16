@@ -13,8 +13,9 @@ class AlertTopicsTest {
     }
 
     @Test fun aKindTheTableDoesntKnowGoesByItsHeading() {
-        assertEquals("Contracts" to "", AlertTopics.of("contract_new_thing", "corp", "normal", "Contracts"))
-        assertEquals("Sol" to "", AlertTopics.of("something_new", "corp", "normal", null))
+        assertEquals("Contracts" to "New", AlertTopics.of("contract_new_thing", "corp", "normal", "Contracts"))
+        assertEquals("Company" to "New", AlertTopics.of("rail_open", "corp", "normal", "Mining and industry"))
+        assertEquals("Sol" to "New", AlertTopics.of("something_new", "corp", "normal", null))
     }
 
     @Test fun unlabelledAlertsGoByTheirOldChannel() {

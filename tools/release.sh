@@ -20,6 +20,8 @@ repo="Jomangork/sol-watch-pocket"
 apk="dist/sol-watch-pocket-$version.apk"
 
 [ -n "$(git status --porcelain --untracked-files=no)" ] && { echo "Commit your changes first."; exit 1; }
+# The app's "What's new" pop-up shows this file after the update.
+[ -s "android/app/src/main/assets/whats_new/$version.md" ] || { echo "Add android/app/src/main/assets/whats_new/$version.md first."; exit 1; }
 gh release view "$tag" --repo "$repo" >/dev/null 2>&1 && { echo "$tag is already released."; exit 1; }
 
 python3 -m unittest discover -s tests -q
