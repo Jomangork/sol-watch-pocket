@@ -369,6 +369,18 @@ class WithBridge(unittest.TestCase):
         self.assertEqual(reads, 3)
         self.assertGreater(size, 3 * 500)
 
+    def test_new_connections_are_counted_per_host(self):
+        import json
+        pool = types.SimpleNamespace(host="solthegame.com", num_connections=3, num_requests=10)
+        pools = types.SimpleNamespace(_container={"k": pool})
+        adapter = types.SimpleNamespace(poolmanager=types.SimpleNamespace(pools=pools))
+        self.runner.api = types.SimpleNamespace(session=types.SimpleNamespace(get_adapter=lambda url: adapter))
+        self.runner.save_data_use(force=True)
+        pool.num_connections, pool.num_requests = 5, 30
+        self.runner.save_data_use(force=True)
+        saved = json.loads((self.folder / pocket_runner.DATA_USE_FILE).read_text())
+        self.assertEqual(saved["connections"]["solthegame.com"], [5, 30])  # added up, not counted twice
+
     def test_bridge_client_is_captured(self):
         api = self.sw.SolApi("k")
         self.assertIs(self.runner.api, api)

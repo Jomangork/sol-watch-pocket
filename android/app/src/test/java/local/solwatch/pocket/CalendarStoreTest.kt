@@ -59,6 +59,21 @@ class CalendarStoreTest {
         assertEquals("Industry: 99% · 6 MB · 3 reads, 2048.0 KB each", UsageLog.describeDataUse(use)[0])
     }
 
+    @Test fun pathsWithOneNameAreAddedUp() {
+        val (_, use) = UsageLog.parseDataUse(
+            """{"since": 1, "paths": {"/industry": [1000, 2], "/industry/flows": [500, 2], "": [100, 1]},
+               "names": {"/industry": "Industry", "/industry/flows": "Industry"}}"""
+        )
+        assertEquals(listOf("Industry", "API index (the bridge's key check)"), use.map { it.name })
+        assertEquals(1500L to 4L, use[0].bytes to use[0].reads)
+        assertEquals("1 KB", UsageLog.sizeLabel(1500))
+    }
+
+    @Test fun connectionsPerHost() {
+        val hosts = UsageLog.parseConnections("""{"connections": {"solthegame.com": [120, 1000]}}""")
+        assertEquals(listOf("solthegame.com: 120 new connections for 1,000 requests (12%)"), UsageLog.describeConnections(hosts))
+    }
+
     @Test fun sameDayConstructionSharesOneRow() {
         fun entry(id: String) = CalEntry(id, hour, 1000.0, "ours", id, "", false, "", "", emptyList())
         val day = listOf(entry("research:x"), entry("build:a"), entry("deal:1"), entry("build:b"), entry("build:c"))

@@ -269,6 +269,7 @@ class Runner:
         self._calendar_due = time.monotonic() + FIRST_WIDGET_READ_SECONDS
         self.log_sizes = tuple(int(n) for n in log_sizes) if log_sizes else BRIDGE_LOG_SIZES
         self.data_use = {}  # path -> [bytes, reads] since the last save
+        self._pool_seen = {}  # id(connection pool) -> (connections, requests) already saved
         self._data_use_due = time.monotonic() + DATA_USE_SAVE_SECONDS
 
     # ---- control, callable from the app's threads ----
@@ -591,7 +592,8 @@ class Runner:
             return
         self._data_use_due = now + DATA_USE_SAVE_SECONDS
         counts, self.data_use = self.data_use, {}
-        if not counts:
+        opened = self._new_connections()
+        if not counts and not opened:
             return
         file = self.folder / DATA_USE_FILE
         try:
@@ -602,8 +604,33 @@ class Runner:
         for path, (size, reads) in counts.items():
             old = paths.get(path) or [0, 0]
             paths[path] = [old[0] + size, old[1] + reads]
+        hosts = saved.get("connections") if isinstance(saved.get("connections"), dict) else {}
+        for host, (made, used) in opened.items():
+            old = hosts.get(host) or [0, 0]
+            hosts[host] = [old[0] + made, old[1] + used]
         file.write_text(json.dumps({"since": saved.get("since") or int(time.time()), "paths": paths,
-                                    "names": self._path_names()}), encoding="utf-8")
+                                    "names": self._path_names(), "connections": hosts}), encoding="utf-8")
+
+    def _new_connections(self):
+        """{host: [connections opened, requests sent]} since the last save, from the bridge's connection pools.
+        Each new HTTPS connection costs a few KB of handshake that the per-check byte counts can't see, so a
+        high ratio of connections to requests explains data the phone counts but the checks don't."""
+        out = {}
+        try:
+            pools = self.api.session.get_adapter("https://").poolmanager.pools._container.values()
+        except Exception:  # no bridge yet, or a urllib3 that keeps its pools elsewhere
+            return out
+        for pool in list(pools):
+            made, used = getattr(pool, "num_connections", 0), getattr(pool, "num_requests", 0)
+            old_made, old_used = self._pool_seen.get(id(pool), (0, 0))
+            if made < old_made or used < old_used:  # a different pool now has that id
+                old_made, old_used = 0, 0
+            self._pool_seen[id(pool)] = (made, used)
+            if made - old_made or used - old_used:
+                entry = out.setdefault(str(getattr(pool, "host", "?")), [0, 0])
+                entry[0] += made - old_made
+                entry[1] += used - old_used
+        return out
 
     def _path_names(self):
         """{API path: the checks that read it} from the Checks menu, for the usage log's per-check figures."""

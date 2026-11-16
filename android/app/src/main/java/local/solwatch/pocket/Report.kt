@@ -31,8 +31,9 @@ object Report {
     const val BRIDGE_LINES = 1500
     private const val TAIL_BYTES = 600_000L  // enough for BRIDGE_LINES lines, without reading a whole 5 MB log
 
-    // A bridge log line: "[12:57:31] text". The bridge's own notes start "[Tag]"; alerts and chat start with an emoji.
-    private val STAMP = Regex("""^\[\d{1,2}:\d{2}:\d{2}] ?""")
+    // A bridge log line starts with its time: "2026-11-15 16:03:31 text" in bridge.log ("[12:57:31] text" on screen).
+    // The bridge's own notes go on "[Tag] …"; alerts and chat start with an emoji.
+    private val STAMP = Regex("""^(?:\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}:\d{2}|\[\d{1,2}:\d{2}:\d{2}]) ?""")
 
     fun fileName(now: Long = System.currentTimeMillis()): String =
         "sol-watch-report-" + SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.US).format(Date(now)) + ".txt"
