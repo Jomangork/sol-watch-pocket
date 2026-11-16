@@ -164,6 +164,25 @@ object Settings {
         prefs(context).edit().putBoolean("quiet_on", on).putInt("quiet_from", from).putInt("quiet_to", to)
             .putString("quiet_days", days).putBoolean("quiet_urgent", urgent).apply()
 
+    // Rail links (bridge 1.10.00): on unless the user turns them off.
+    fun railLinks(context: Context) = prefs(context).getBoolean("rail_links", true)
+    fun setRailLinks(context: Context, on: Boolean) = prefs(context).edit().putBoolean("rail_links", on).apply()
+
+    // The bridge's status post: on, at these times of day (minutes after midnight). Starts at 06:00 and 16:00.
+    fun statusPostOn(context: Context) = prefs(context).getBoolean("status_post", true)
+    fun statusTimes(context: Context): List<Int> =
+        (prefs(context).getString("status_times", "360,960") ?: "").split(",").mapNotNull { it.trim().toIntOrNull() }
+            .filter { it in 0 until 1440 }.distinct().sorted()
+
+    fun setStatusPost(context: Context, on: Boolean, times: List<Int>) =
+        prefs(context).edit().putBoolean("status_post", on).putString("status_times", times.joinToString(",")).apply()
+
+    /** For settings.ini: "06:00, 16:00", or "off". */
+    fun statusTimesIni(context: Context): String {
+        val times = statusTimes(context)
+        return if (!statusPostOn(context) || times.isEmpty()) "off" else times.joinToString(", ") { "%02d:%02d".format(it / 60, it % 60) }
+    }
+
     fun enabled(context: Context) = prefs(context).getBoolean(ENABLED, false)
 
     fun setEnabled(context: Context, on: Boolean) = prefs(context).edit().putBoolean(ENABLED, on).apply()

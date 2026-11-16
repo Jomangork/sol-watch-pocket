@@ -19,7 +19,8 @@ GROUPS = (
     ("Mining and industry", (
         "mining_summary", "mining_order", "ore_body_empty", "industry_summary", "site_stopped", "site_slowed",
         "stock_running_out", "storage_filling", "vehicle_blocked", "elevator_booked", "elevator_soon",
-        "elevator_arrived", "power_short", "power_restored", "life_support_short", "life_support_restored",
+        "elevator_arrived", "rail_laying", "rail_open", "rail_line_laying", "rail_line_open", "power_short",
+        "power_restored", "life_support_short", "life_support_restored",
     )),
     ("Company", (
         "facility_upgraded", "upgrade_done", "queue_blocked", "queue_summary", "supplies_low", "supplies_summary",

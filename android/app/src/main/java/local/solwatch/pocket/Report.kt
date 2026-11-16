@@ -22,7 +22,7 @@ object Report {
 
     val PARTS = listOf(
         Part("status", "Status, checks and settings", "Versions, running time, each check's interval, Storage and alert choices", true),
-        Part("usage", "Battery and data", "The usage samples and data per check", true),
+        Part("usage", "Data per check", "How much each check downloads, since the count started", true),
         Part("errors", "Errors log", "The last 300 lines, and the last crash if there was one", true),
         Part("bridge", "Bridge log", "The last 1,500 lines of what the bridge did (reads, retries, outages)", true),
         Part("alerts", "Alert and chat text", "Lines in the bridge log that are alerts or chat, plus the last day's alerts", false),
@@ -103,7 +103,7 @@ object Report {
                 appendLine(logs.listFiles()?.sortedBy { it.name }?.joinToString(", ") { "${it.name} ${it.length() / 1024} KB" } ?: "No logs")
             }
             if ("usage" in parts) {
-                section("Battery and data")
+                section("Data per check")
                 append(UsageLog.export(context))
             }
             if ("errors" in parts) {

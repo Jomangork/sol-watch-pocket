@@ -16,10 +16,12 @@ It's a player-made tool, not made or supported by the game's developers.
 - **Calendar tab:** the game's coming rule changes (power, relays, ship module parts), Earth's ballot and the Security Council, elevators being built, hazard forecasts, and our own deadlines (research, construction, arrivals, elevator cargo, diplomacy offers). Agenda and month views (construction finishing the same day shares one row), a reminder on any entry, and "Add to phone calendar". It uses only replies the checks already read, so it costs no extra data.
 - **Checks** (Settings › Checks). Each of the bridge's checks can run at its own interval or be switched off, with presets (Recommended, Saver, Fast, and Custom for your own mix; the one in use is highlighted). Every check offers the same intervals; Market corruption and Derelicts can't go below 10 minutes, because each read downloads a large reply, and say so under the check. The menu shows reads a minute against the game's limit (orange with ⚠️ from 40, red with ⛔ from 55) and an estimate of the data each check uses. Mobile data can have its own settings, applied when the phone leaves Wi-Fi.
 - **My alerts** (Settings › My alerts): your own thresholds on top of the bridge's: money below or above an amount, income falling below a level, a good at a place running out within N hours, crew supplies, research finishing, a good's stock on Earth's market, and a spaceport's wait. Each fires once when its line is crossed, loud or quiet as you choose, and shows its current value. They use the checks' own reads; a spaceport wait adds one small read every 10 minutes.
-- **Our fleet flights and elevator cargo** (optional, in Settings › Checks): a notice when one of your fleets leaves, changes course, is about to land and lands, and the same for your space elevator bookings.
+- **Our fleet flights, elevator cargo and rail links** (optional, in Settings › Checks): a notice when one of your fleets leaves, changes course, is about to land and lands, and the same for your space elevator bookings.
 - **Home-screen widget:** the latest urgent alert, the next big Calendar event with a countdown, money and income, research, and the next arrivals. It shows more when it's bigger.
-- **Quiet hours** (Settings › Status): between two times, on every night, weeknights or weekends, alerts arrive without a sound or vibration but still show; urgent alerts can be let through. 🌙 in the header while it's quiet.
+- **Quiet hours** (Settings › My app): between two times, on every night, weeknights or weekends, alerts arrive without a sound or vibration but still show; urgent alerts can be let through. 🌙 in the header while it's quiet.
 - **Clock:** every time the app shows can be 24-hour, 12-hour or the phone's setting.
+- **Bridge status post** (Settings › My app): when the bridge's "still running" post comes (06:00 and 16:00 to start), or off.
+- **Back up and restore settings** (Settings › My app): every setting you chose in one file, without the API key.
 - **Report for Claude** (Settings › Status): one text file with status, settings, battery and data use, the errors log and the bridge log, to share or save in Downloads. The API key is never in it; alert and chat text only if you switch it on.
 - **Storage** (Settings › Status): the space used, how big the bridge's logs may grow, and how long alert history is kept.
 - **Status:** a green, yellow or red dot. Shows which sections your API key can read, plus the bridge's own log. When the game's server is down, the dot turns yellow and the log notes the outage once rather than every failed read.
@@ -48,10 +50,10 @@ Android 10 or newer, 64-bit ARM phones only.
 
 ## Battery and data
 
-The app stays awake to check every minute or so. Measured on one phone over 15 hours in November 2026 (Android's own battery screen and the app's usage log):
+The app stays awake to check every minute or so. Measured on one phone in November 2026 (Android's own battery screen, and the app's data count per check):
 
-- **Battery:** about 0.3% of the battery an hour for the app itself (7% of the phone's drain that day).
-- **Data:** about 4.5 MB an hour with the recommended settings (roughly 3 GB a month on Wi-Fi), and about 2.4 MB an hour with the Saver preset on mobile data (roughly 1.7 GB a month). The Checks estimate is lower than this, so treat it as a guide to which checks cost most.
+- **Battery:** about 0.3% of the battery an hour with the recommended settings, about 0.6% with the Fast preset including time spent in the app.
+- **Data:** the Industry check is most of it, because it downloads two large replies. With the Fast preset (Industry every 5 minutes) about 50 MB a day on Wi-Fi; with Industry every minute about 170 MB. Mobile data with the Saver preset: about 15 MB a month. Most other reads come back unchanged and cost about 1 KB. Report for Claude (Settings › Status) shows what each check downloaded.
 
 ## How it works
 

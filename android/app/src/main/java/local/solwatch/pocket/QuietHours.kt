@@ -63,7 +63,7 @@ object QuietHours {
     fun silences(context: Context, priority: String) = active(context) && !(priority == "urgent" && Settings.quietUrgent(context))
 }
 
-/** Settings › Status: the Quiet hours card, with the app's clock (24- or 12-hour) beside it. */
+/** Settings › My app: the Quiet hours card. */
 @Composable
 fun QuietHoursCard() {
     val context = LocalContext.current
@@ -72,7 +72,6 @@ fun QuietHoursCard() {
     var to by remember { mutableStateOf(Settings.quietTo(context)) }
     var days by remember { mutableStateOf(Settings.quietDays(context)) }
     var urgent by remember { mutableStateOf(Settings.quietUrgent(context)) }
-    var clock by remember { mutableStateOf(Settings.clock(context)) }
     fun save() = Settings.setQuiet(context, on, from, to, days, urgent)
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -129,14 +128,25 @@ fun QuietHoursCard() {
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            Text("Clock", style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+/** Settings › My app: the clock for every time the app shows. */
+@Composable
+fun ClockCard() {
+    val context = LocalContext.current
+    var clock by remember { mutableStateOf(Settings.clock(context)) }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Clock", fontWeight = FontWeight.SemiBold)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for ((id, name) in TimeText.CHOICES) {
                     FilterChip(selected = clock == id, onClick = { clock = id; Settings.setClock(context, id) }, label = { Text(name) })
                 }
             }
             Text(
-                "For every time the app shows: alerts, the calendar, the widget and these quiet hours.",
+                "For every time the app shows: alerts, the calendar, the widget, quiet hours and the status post.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

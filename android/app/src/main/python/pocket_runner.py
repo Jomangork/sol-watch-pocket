@@ -44,13 +44,19 @@ check_minutes = 60
 
 
 
-def settings_ini(fleet_flights=False, fleet_warning_minutes=30, elevator_trips=False, new_options="{}"):
+def settings_ini(fleet_flights=False, fleet_warning_minutes=30, elevator_trips=False, new_options="{}", rail_links=True,
+                 status_times="08:00"):
     """settings.ini with the app's own choices: posts about our fleets' flights (bridge 1.07.14+) and our space
     elevator bookings (1.07.15+; an older bridge ignores both), and how many minutes before they land or arrive
     to remind (0: no reminder). Global chat is always relayed on the phone: bridge 1.09.00+ turns it off by default
     for Discord, and the Chat check on the Checks tab decides whether chat is read at all.
     new_options: JSON {name: true/false} for [alerts] switches a newer bridge added (bridge_options), until the
-    app knows them properly. Names it already sets, or that aren't plain words, are ignored."""
+    app knows them properly. Names it already sets, or that aren't plain words, are ignored.
+    rail_links: posts about our rail links (bridge 1.10.00+). status_times: when the bridge's status post comes,
+    "06:00, 16:00" or "off" (bridge 1.07+; the app checks the format, so a bad value can't stop the bridge)."""
+    times = str(status_times or "off").strip()
+    if times.lower() != "off" and not re.fullmatch(r"\d{1,2}:\d{2}(\s*,\s*\d{1,2}:\d{2})*", times):
+        times = "08:00"
     try:
         extra = {k: v for k, v in json.loads(new_options or "{}").items()
                  if isinstance(k, str) and re.fullmatch(r"[a-z][a-z0-9_]*_posts", k) and k not in APP_OPTIONS}
@@ -60,13 +66,15 @@ def settings_ini(fleet_flights=False, fleet_warning_minutes=30, elevator_trips=F
                             f"elevator_trip_posts = {'yes' if elevator_trips else 'no'}\n"
                             f"fleet_arrival_warning_minutes = {max(0, min(1440, int(fleet_warning_minutes)))}\n"
                             "global_chat_posts = yes\n"
+                            f"rail_link_posts = {'yes' if rail_links else 'no'}\n"
+                            f"status_times = {times}\n"
                             + "".join(f"{k} = {'yes' if v else 'no'}\n" for k, v in sorted(extra.items())))
 
 
 # [alerts] switches the app sets itself, and those every bridge up to 1.09.00 had. A newer bridge's other on/off
 # "*_posts" switches are offered in Settings › Checks as "New from the bridge" (bridge 1.10.00's rail_link_posts was
 # the first), so they can be tried before an app update knows them.
-APP_OPTIONS = ("fleet_move_posts", "elevator_trip_posts", "global_chat_posts")
+APP_OPTIONS = ("fleet_move_posts", "elevator_trip_posts", "global_chat_posts", "rail_link_posts")
 KNOWN_OPTIONS = APP_OPTIONS + ("game_update_posts", "new_place_posts")
 BRIDGE_OPTIONS_FILE = "bridge_options.json"
 

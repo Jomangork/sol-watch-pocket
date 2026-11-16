@@ -144,7 +144,8 @@ fun PocketScreens() {
     }
 }
 
-val SETTINGS_CHIPS = listOf("Status", "Checks", "Alert types", "My alerts")
+// Most often changed first (0.9.6): Status, then what the user tunes most.
+val SETTINGS_CHIPS = listOf("Status", "My app", "My alerts", "Checks", "Alert types")
 
 /** The Settings tab's chip, kept while switching tabs (and set when another part of the app asks for one). */
 object SettingsNav {
@@ -166,6 +167,7 @@ fun SettingsScreen(modifier: Modifier) {
         when (SettingsNav.chip) {
             "Checks" -> ChecksScreen(content)
             "Alert types" -> AlertTypesScreen(content)
+            "My app" -> MyAppScreen(content)
             "My alerts" -> MyAlertsScreen(content)
             else -> StatusScreen(content)
         }

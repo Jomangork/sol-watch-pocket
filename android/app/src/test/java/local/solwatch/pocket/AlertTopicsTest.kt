@@ -14,7 +14,8 @@ class AlertTopicsTest {
 
     @Test fun aKindTheTableDoesntKnowGoesByItsHeading() {
         assertEquals("Contracts" to "New", AlertTopics.of("contract_new_thing", "corp", "normal", "Contracts"))
-        assertEquals("Company" to "New", AlertTopics.of("rail_open", "corp", "normal", "Mining and industry"))
+        assertEquals("Company" to "Rail", AlertTopics.of("rail_open", "corp", "normal", "Mining and industry"))
+        assertEquals("Company" to "New", AlertTopics.of("tram_open", "corp", "normal", "Mining and industry"))
         assertEquals("Sol" to "New", AlertTopics.of("something_new", "corp", "normal", null))
     }
 
@@ -27,7 +28,7 @@ class AlertTopicsTest {
     @Test fun everyKindIsInOneFilterOnly() {
         val all = AlertTopics.TABS.flatMap { tab -> tab.subs.flatMap { it.kinds } }
         assertEquals(all.size, all.toSet().size)
-        assertEquals(135, all.size)  // the bridge's 134 kinds and My alerts
+        assertEquals(139, all.size)  // the bridge's 138 kinds (1.10.00) and My alerts
     }
 
     @Test fun labels() {

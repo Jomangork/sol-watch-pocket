@@ -23,6 +23,7 @@ object AlertTopics {
                 "site_stopped", "site_slowed", "stock_running_out", "storage_filling", "vehicle_blocked",
                 "power_short", "power_restored", "life_support_short", "life_support_restored", "elevator_booked",
                 "elevator_soon", "elevator_arrived")),
+            Sub("Rail", setOf("rail_laying", "rail_open", "rail_line_laying", "rail_line_open")),  // bridge 1.10.00
             Sub("Upkeep", setOf("facility_upgraded", "upgrade_done", "queue_blocked", "queue_summary",
                 "supplies_low", "supplies_summary", "daily_gift")),
             Sub("My alerts", setOf("my_alert")),  // the user's own thresholds (Settings › My alerts)

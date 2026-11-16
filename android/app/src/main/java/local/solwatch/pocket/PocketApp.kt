@@ -13,6 +13,7 @@ class PocketApp : Application() {
         if (!Python.isStarted()) Python.start(AndroidPlatform(this))
         runCatching { Settings.moveOldFast(this) }
         NewOptions.resetAfterUpdate(this)
+        UsageLog.retireSamples(this)
         TimeText.load(this)
         Notifier.createChannels(this)
         AppUpdater.createChannel(this)

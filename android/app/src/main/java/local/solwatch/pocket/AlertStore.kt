@@ -22,7 +22,7 @@ data class Alert(
 
 /** Every alert the bridge handed over, kept for Settings.historyDays (30 by default) in the app's private database. */
 class AlertStore private constructor(private val context: Context) :
-    SQLiteOpenHelper(context, "alerts.db", null, 3) {
+    SQLiteOpenHelper(context, "alerts.db", null, 4) {
 
     private val _version = MutableStateFlow(0)
     /** Bumped on every change, so screens know to reload. */
@@ -40,6 +40,16 @@ class AlertStore private constructor(private val context: Context) :
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) db.execSQL("ALTER TABLE alerts ADD COLUMN kind TEXT NOT NULL DEFAULT ''")
+        if (oldVersion in 3..3) {  // 0.9.6: kinds that came under "New" (rail links) move to their own filter
+            val newer = db.rawQuery("SELECT DISTINCT kind, channel, priority FROM alerts WHERE sub = 'New'", null).use {
+                buildList { while (it.moveToNext()) add(Triple(it.getString(0), it.getString(1), it.getString(2))) }
+            }
+            for ((kind, channel, priority) in newer) {
+                val (tab, sub) = AlertTopics.of(kind, channel, priority, AlertKinds.headingOf(context, kind))
+                db.update("alerts", ContentValues().apply { put("tab", tab); put("sub", sub) },
+                    "kind = ? AND sub = 'New'", arrayOf(kind))
+            }
+        }
         if (oldVersion < 3) {  // 0.8.4: alerts already kept are sorted into the topic tabs too
             db.execSQL("ALTER TABLE alerts ADD COLUMN tab TEXT NOT NULL DEFAULT ''")
             db.execSQL("ALTER TABLE alerts ADD COLUMN sub TEXT NOT NULL DEFAULT ''")

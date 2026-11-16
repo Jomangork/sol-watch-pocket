@@ -245,6 +245,17 @@ class WithBridge(unittest.TestCase):
         self.assertTrue(body.startswith("3× Corvette | Lands 1 Jan 2033, 05:47 PM · 🕰️ "), body)
         self.assertEqual(when, "14 Nov 2032, 06:22 AM")
 
+    def test_rail_links_and_status_times_reach_the_bridge(self):
+        ini = pocket_runner.settings_ini(rail_links=True, status_times="06:00, 16:00")
+        runner = pocket_runner.Runner(self.folder.parent / "status", "sol_x", FakeSender(), settings=ini)
+        sw = runner.prepare()
+        sw.load_settings(self.folder.parent / "status" / "settings.ini")
+        self.assertTrue(sw.RAIL_LINK_POSTS)
+        self.assertEqual(sw.STATUS_TIMES, ((6, 0), (16, 0)))
+        self.assertIn("status_times = off", pocket_runner.settings_ini(status_times="off"))
+        self.assertIn("status_times = 08:00", pocket_runner.settings_ini(status_times="6am\n[bridge]"))  # never a bad line
+        sw.RAIL_LINK_POSTS, sw.STATUS_TIMES = False, None  # the module is shared with other tests
+
     def test_settings_carry_the_fleet_flight_choice(self):
         self.assertIn("fleet_move_posts = no", pocket_runner.settings_ini())
         ini = pocket_runner.settings_ini(True, 10, elevator_trips=True)

@@ -280,6 +280,7 @@ private fun FleetFlightsCard() {
     val context = LocalContext.current
     var on by remember { mutableStateOf(Settings.fleetFlights(context)) }
     var elevator by remember { mutableStateOf(Settings.elevatorTrips(context)) }
+    var rails by remember { mutableStateOf(Settings.railLinks(context)) }
     var minutes by remember { mutableStateOf(Settings.fleetWarningMinutes(context)) }
     fun applied() { if (BridgeService.status.value.running) BridgeService.restart(context) }
     Card(Modifier.fillMaxWidth()) {
@@ -308,6 +309,18 @@ private fun FleetFlightsCard() {
                     )
                 }
                 Switch(checked = elevator, onCheckedChange = { elevator = it; Settings.setElevatorTrips(context, it); applied() })
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Our rail links", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "🛤️ when we start laying a rail link and when it's open, and the same for shared rail lines we backed. " +
+                            "Quiet notifications. Uses the Industry check's reads; no extra data.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = rails, onCheckedChange = { rails = it; Settings.setRailLinks(context, it); applied() })
             }
             if (on || elevator) {
                 Text("Reminder before landing or arrival", style = MaterialTheme.typography.labelMedium)
@@ -462,10 +475,44 @@ fun StatusScreen(modifier: Modifier) {
                         )
                     }) { Text("Allow background running") }
                 }
+                val bytes = TrafficStats.getUidRxBytes(Process.myUid()) + TrafficStats.getUidTxBytes(Process.myUid())
+                Text(
+                    "Data used by this app since the phone started: ${dataLabel(bytes / 1024.0 / 1024.0)}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+        ApiKeyCard(running = status.running)
+        BridgeUpdateCard(running = status.running)
+        // Every log in one place.
+        ReportCard()
+        LogCard("Problems (errors.log)", errors.ifBlank { "None" })
+        LogCard("Recent log (bridge.log)", log.ifBlank { "Nothing yet" })
+        StorageCard(tick, running = status.running)
+    }
+}
+
+// ---------------- My app ----------------
+
+/** Settings › My app: how the app looks and updates, and when and how alerts reach you. */
+@Composable
+fun MyAppScreen(modifier: Modifier) {
+    val context = LocalContext.current
+    val status by BridgeService.status.collectAsState()
+    Column(
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        PersonaliseCard()
+        ClockCard()
+        AppUpdateCard()
+        Text("Notifications", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 6.dp))
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 var soundAll by remember { mutableStateOf(Settings.soundAll(context)) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Sound for every alert")
+                        Text("Sound for every alert", fontWeight = FontWeight.SemiBold)
                         Text(
                             if (soundAll) "Every alert makes a sound." else "Only urgent alerts and chat make a sound.",
                             style = MaterialTheme.typography.bodySmall,
@@ -480,69 +527,11 @@ fun StatusScreen(modifier: Modifier) {
                             .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName)
                     )
                 }) { Text("Notification sounds and channels") }
-                val bytes = TrafficStats.getUidRxBytes(Process.myUid()) + TrafficStats.getUidTxBytes(Process.myUid())
-                Text(
-                    "Data used by this app since the phone started: ${dataLabel(bytes / 1024.0 / 1024.0)}",
-                    style = MaterialTheme.typography.bodySmall,
-                )
             }
         }
         QuietHoursCard()
-        ReportCard()
-        StorageCard(tick, running = status.running)
-        UsageCard(tick)
-        AppUpdateCard()
-        BridgeUpdateCard(running = status.running)
-        PersonaliseCard()
-        ApiKeyCard(running = status.running)
-        LogCard("Problems (errors.log)", errors.ifBlank { "None" })
-        LogCard("Recent log (bridge.log)", log.ifBlank { "Nothing yet" })
-    }
-}
-
-/** TEMPORARY (see UsageLog): battery drain and data use measured by the app itself. */
-@Composable
-private fun UsageCard(tick: Int) {
-    val context = LocalContext.current
-    var cleared by remember { mutableStateOf(0) }
-    val samples by produceState(emptyList<UsageLog.Sample>(), tick, cleared) {
-        value = withContext(Dispatchers.IO) { UsageLog.read(context) }
-    }
-    var copied by remember { mutableStateOf(false) }
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Battery and data log (temporary)", fontWeight = FontWeight.SemiBold)
-            val since = samples.firstOrNull()?.time
-            Text(
-                if (since == null) "Records every 10 minutes while Sol Watch runs; the first sample comes soon."
-                else "Recording every 10 minutes since ${shortTime(since / 1000)} (${samples.size} samples). " +
-                    "Battery is the whole phone's drain while unplugged; data is this app only.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            val now = System.currentTimeMillis()
-            Text("Last 24 hours", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-            UsageLog.describe(UsageLog.summarize(samples, now - 24 * 3600 * 1000L)).forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-            Text("Whole log", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-            UsageLog.describe(UsageLog.summarize(samples)).forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-            val use = remember(tick, cleared) { UsageLog.dataUse(context) }
-            Text("Data per check", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-            if (use == null || use.second.isEmpty()) {
-                Text("Counted from now on; the first figures come within 5 minutes.", style = MaterialTheme.typography.bodySmall)
-            } else {
-                Text("Since ${shortTime(use.first / 1000)}, biggest first:", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                UsageLog.describeDataUse(use.second, top = 8).forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = {
-                    val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Sol Watch usage log", UsageLog.export(context)))
-                    copied = true
-                }) { Text(if (copied) "Copied" else "Copy log") }
-                TextButton(onClick = { UsageLog.clear(context); cleared++; copied = false }) { Text("Clear") }
-            }
-        }
+        StatusPostCard(running = status.running)
+        BackupCard()
     }
 }
 

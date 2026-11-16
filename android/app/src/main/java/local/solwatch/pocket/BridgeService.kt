@@ -97,14 +97,13 @@ class BridgeService : Service() {
             watchNetwork()
         }
         if (updateChecker?.isAlive != true) {
-            // App updates (hourly on Wi-Fi, daily on mobile data) and the usage log, while SOL-Watch runs.
+            // App updates (hourly on Wi-Fi, daily on mobile data), while Sol Watch runs.
             updateChecker = Thread({
                 try {
                     while (!Thread.currentThread().isInterrupted) {
                         val metered = metered()
                         if (AppUpdater.due(this, metered)) runCatching { AppUpdater.check(this) }
-                        runCatching { UsageLog.record(this, metered, _status.value.running) }  // temporary
-                        Thread.sleep(UsageLog.EVERY_MS)
+                        Thread.sleep(10 * 60 * 1000L)
                     }
                 } catch (_: InterruptedException) {
                 }
@@ -140,6 +139,8 @@ class BridgeService : Service() {
                         "settings_ini", Settings.fleetFlights(this), Settings.fleetWarningMinutes(this),
                         Kwarg("elevator_trips", Settings.elevatorTrips(this)),
                         Kwarg("new_options", NewOptions.json(this)),
+                        Kwarg("rail_links", Settings.railLinks(this)),
+                        Kwarg("status_times", Settings.statusTimesIni(this)),
                     )),
                 )
                 runner = created
