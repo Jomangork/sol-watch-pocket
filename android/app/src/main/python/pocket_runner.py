@@ -287,10 +287,19 @@ def alert_kinds(module):
     return groups
 
 
+# The status post lists the game website's code files it watches for game updates; on the phone, a count is enough.
+GAME_BUILD_RE = re.compile(r" \| Game build: ([^|\n]+)")
+
+
+def _game_build(match):
+    files = [f for f in match.group(1).split(",") if f.strip()]
+    return f" | Game build: {len(files)} file{'s' if len(files) != 1 else ''}"
+
+
 def app_wording(line):
     for pattern, replacement in APP_WORDING:
         line = pattern.sub(replacement, line)
-    return line
+    return GAME_BUILD_RE.sub(_game_build, line)
 
 
 def channel_of(webhook):

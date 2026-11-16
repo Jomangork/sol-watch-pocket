@@ -56,6 +56,11 @@ class PureFunctions(unittest.TestCase):
             if row["min"] > pocket_checks.MIN_DEFAULT:
                 self.assertTrue(row["min_why"], row["id"])  # the menu says why it can't go faster
 
+    def test_status_post_counts_the_game_build_files(self):
+        line = ("🟢 **[BRIDGE STATUS]** Sol-Watch v1.10.00 running for 1h | 158 polls, 0 failed | "
+                "Problems logged: none in 24h | Game build: index-C7N7.js, api-dkHL.js, vendor-BUnz.js")
+        self.assertTrue(pocket_runner.app_wording(line).endswith("| Problems logged: none in 24h | Game build: 3 files"))
+
     def test_key_advice_is_reworded_for_the_app(self):
         line = ("🔑 Make a new key in the game, put it in `.env` as `SOL_BRIDGE_API_KEY` and restart the bridge.")
         self.assertEqual(pocket_runner.app_wording(line),
