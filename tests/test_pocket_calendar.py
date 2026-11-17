@@ -54,7 +54,7 @@ class Calendar(unittest.TestCase):
         items = entries(**{"/ueg": {"projects": [
             {"stationId": "elevator", "builtDay": 900},
             {"stationId": "pearson", "builtDay": None}]}, "/company": {"modulePartsDay": 1001}})
-        self.assertEqual([e["id"] for e in items], ["module_parts", "elevator_built:pearson"])
+        self.assertEqual([e["id"] for e in items], ["module_parts", "landing_rules", "elevator_built:pearson"])
         self.assertIsNone(items[-1]["at"])
         self.assertEqual(items[-1]["title"], "Pearson Elevator opens")
 
@@ -62,7 +62,8 @@ class Calendar(unittest.TestCase):
         got = by_id(entries(**{"/company": {"workBills": [
             {"kind": "habitat", "ref": "a", "what": "level 3 of the habitat", "where": "at A", "readyDay": 999},
             {"kind": "habitat", "ref": "b", "what": "level 4 of the habitat", "where": "at B", "readyDay": 990}]}}))
-        self.assertEqual([e["title"] for e in got.values()], ["Ready: Level 3 of the habitat"])  # 1 h ago stays
+        self.assertEqual([e["title"] for e in got.values() if e["id"] != "landing_rules"],
+                         ["Ready: Level 3 of the habitat"])  # 1 h ago stays
 
     def test_threats_and_ours(self):
         got = by_id(entries(**{
@@ -97,6 +98,26 @@ class NewRuleDates(unittest.TestCase):
         self.assertEqual([(e["title"], e["day"], e["major"]) for e in new], [("New game rule: Landing", 1463.0, True)])
         self.assertIn("/craft → landing.rulesDay", new[0]["about"])
         self.assertEqual(pocket_calendar._tidy_field("liftRulesDay"), "Lift")
+
+
+class LandingRules(unittest.TestCase):
+    def test_the_fixed_date_with_gravity_where_we_have_places(self):
+        clock = {"clock": {"epochRealMs": 0, "epochGameDay": 12000.0, "timeScale": 24}}
+        tapped = {
+            "/clock": clock,
+            "/reference/bodies": {"bodies": [
+                {"id": "ganymede", "name": "Ganymede", "gm": 9887.8, "radiusKm": 2634.1, "landable": True},
+                {"id": "moon", "name": "Moon", "gm": 4902.8, "radiusKm": 1737.4, "landable": True},
+                {"id": "earth", "name": "Earth", "gm": 398600.4, "radiusKm": 6371.0, "landable": True}]},
+            "/reference/places": {"places": [{"id": "ganymede/tros", "bodyId": "ganymede"},
+                                             {"id": "moon/tycho", "bodyId": "moon"}, {"id": "gulf", "bodyId": "earth"}]},
+            "/industry": {"industry": {"stock": [{"regionId": "ganymede/tros"}, {"regionId": "gulf"}]}},
+            "/company": {"sustainment": [{"placeId": "moon/tycho"}]},
+        }
+        entry = next(e for e in pocket_calendar.build(tapped, 0) if e["id"] == "landing_rules")
+        self.assertEqual((entry["day"], entry["major"], entry["kind"]), (12590, True, "world"))
+        self.assertEqual(entry["at"], int((12590 - 12000) / 24 * 86_400_000))  # 590 game days: about 24.6 real days
+        self.assertEqual(entry["details"], ["Moon: 1.62 m/s²", "Ganymede: 1.43 m/s²"])  # Earth doesn't count
 
 
 if __name__ == "__main__":

@@ -20,7 +20,27 @@ ELEVATOR_IDS = ("elevator", "tsiolkovsky_elevator", "pearson")
 
 
 KNOWN_RULE_DAYS = {("/industry", "power.rulesDay")}  # placed by hand above
+# The landing and lift-off rules: built into the game's own code (not the API) as game day 12590, about 6 Dec 2026
+# (bridge chat, BRIDGE-NOTES.md 2026-11-17). Only a game update can move it.
+LANDING_RULES_DAY = 12590
 RULE_DAY_RE = re.compile(r"(?:^|[a-z])[Rr]ules?(?:Start)?Day$")
+
+
+def _our_gravity(tapped):
+    """["Ganymede: 1.43 m/s²", …] for the landable worlds where we hold stock or crew, strongest pull first."""
+    bodies = {b.get("id"): b for b in (tapped.get("/reference/bodies") or {}).get("bodies") or () if isinstance(b, dict)}
+    places = {p.get("id"): p for p in (tapped.get("/reference/places") or {}).get("places") or () if isinstance(p, dict)}
+    ours = {s.get("regionId") for s in ((tapped.get("/industry") or {}).get("industry") or {}).get("stock") or ()
+            if isinstance(s, dict)}
+    ours |= {p.get("placeId") for p in (tapped.get("/company") or {}).get("sustainment") or () if isinstance(p, dict)}
+    pulls = {}
+    for place in ours:
+        body = bodies.get((places.get(place) or {}).get("bodyId"))
+        gm, radius = _num((body or {}).get("gm")), _num((body or {}).get("radiusKm"))
+        if not body or body.get("id") in ("earth", "venus") or not body.get("landable") or not gm or not radius:
+            continue
+        pulls[body.get("name") or body.get("id")] = gm / radius ** 2 * 1000
+    return [f"{name}: {g:.2f} m/s²" for name, g in sorted(pulls.items(), key=lambda kv: -kv[1])]
 
 
 def _rule_days(tapped, depth=3):
@@ -119,6 +139,17 @@ def build(tapped, now_ms):
               "operations share what's left. If life support runs short, its people ration, then leave or die. "
               "Keep enriched uranium stocked at each place: the fuel our fission plants were given runs out in time.",
         source="Industry check", details=places)
+
+    # Landing and lift-off: gravity of the worlds where we have places, from /reference/bodies (gm / r² × 1000).
+    add("landing_rules", LANDING_RULES_DAY, "world", "Landing and lift-off rules",
+        "Ships too weak for a world's gravity hold orbit instead", major=True,
+        about="A ship lands on a world, or lifts off from it, on its own drive only when its lift (thrust over its mass, so "
+              "a full hold lifts less) beats the world's gravity. A fleet lands only if its weakest ship can; one that "
+              "can't holds orbit over the place, still defends it and pays no climb. Today this applies only to faction "
+              "colonies, Moon places and faction outposts near Earth and the Moon. From this date it covers every surface "
+              "place, our own outposts included, and tugs and freighters too. Ships towed up or down aren't affected; "
+              "Earth and Venus's cloud cities don't count. The game shows each ship's lift; the API doesn't yet.",
+        source="The game's own rules (a fixed date, not in the API)", details=_our_gravity(tapped))
 
     # A rule change the app doesn't know yet: any "...RulesDay" or "rulesDay" field in a reply the checks read, so
     # a new game rule shows up the day it appears, before an app update names it properly.
