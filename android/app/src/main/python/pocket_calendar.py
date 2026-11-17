@@ -5,17 +5,49 @@ Each entry: {"id", "day" (game day or None), "at" (real ms or None), "kind" ("wo
 yet (an elevator still being built). Ids stay the same while the entry means the same thing, so the app
 can keep a reminder on it.
 """
+import re
 import pocket_glance
 
 # Bridge reads the calendar takes its dates from.
 PATHS = ("/clock", "/company", "/industry", "/factions", "/ueg", "/defense", "/research", "/craft",
-         "/reference/techs", "/reference/places", "/reference/bodies")
+         "/reference/techs", "/reference/places", "/reference/bodies", "/fleets")  # /fleets: only for new rule dates
 PAST_HOURS = 6  # an entry stays listed this long after its time, marked as past
 RELAY_START_DAYS, RELAY_FULL_DAYS = 15, 30  # real days after the relay burn-in (game glossary)
 ELEVATOR_NAMES = {"elevator": "Artsutanov Elevator", "tsiolkovsky_elevator": "Tsiolkovsky Elevator",
                   "pearson": "Pearson Elevator", "skyhook": "Skyhook"}
 HAZARD_NAMES = {"flare": "Solar flare"}
 ELEVATOR_IDS = ("elevator", "tsiolkovsky_elevator", "pearson")
+
+
+KNOWN_RULE_DAYS = {("/industry", "power.rulesDay")}  # placed by hand above
+RULE_DAY_RE = re.compile(r"(?:^|[a-z])[Rr]ules?(?:Start)?Day$")
+
+
+def _rule_days(tapped, depth=3):
+    """(API path, dotted key, game day) for every "...RulesDay" number in the tapped replies, a few levels deep."""
+    found = []
+
+    def walk(value, path, prefix, level):
+        if level > depth or not isinstance(value, dict):
+            return
+        for key, item in value.items():
+            dotted = f"{prefix}{key}"
+            if isinstance(item, (int, float)) and not isinstance(item, bool) and RULE_DAY_RE.search(str(key)):
+                found.append((path, dotted, item))
+            elif isinstance(item, dict):
+                walk(item, path, dotted + ".", level + 1)
+
+    for path, body in tapped.items():
+        walk(body, path, "", 0)
+    return found
+
+
+def _tidy_field(key):
+    """'landing.rulesDay' -> 'Landing', 'liftRulesDay' -> 'Lift' (the part that names the rule)."""
+    last = key.split(".")
+    name = re.sub(r"[Rr]ules?(?:Start)?Day$", "", last[-1]) or (last[-2] if len(last) > 1 else "rules")
+    words = re.sub(r"(?<!^)(?=[A-Z])", " ", name).replace("_", " ").strip()
+    return words[:1].upper() + words[1:].lower() if words else "Rules"
 
 
 def _num(value):
@@ -87,6 +119,16 @@ def build(tapped, now_ms):
               "operations share what's left. If life support runs short, its people ration, then leave or die. "
               "Keep enriched uranium stocked at each place: the fuel our fission plants were given runs out in time.",
         source="Industry check", details=places)
+
+    # A rule change the app doesn't know yet: any "...RulesDay" or "rulesDay" field in a reply the checks read, so
+    # a new game rule shows up the day it appears, before an app update names it properly.
+    for path, key, day in _rule_days(tapped):
+        if (path, key) in KNOWN_RULE_DAYS:
+            continue
+        label = _tidy_field(key)
+        add(f"rules:{path}:{key}", day, "world", f"New game rule: {label}", "Rule change found in the game's data",
+            major=True, about=f"The game gives a date for this rule ({path} → {key}), but this app doesn't know it "
+                              "yet. Check the game's help for what changes.", source=f"{path} (new field)")
 
     burn_in = _num(company.get("relayBurnInDay"))
     if burn_in is not None:

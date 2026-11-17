@@ -87,5 +87,17 @@ class Calendar(unittest.TestCase):
         self.assertNotIn("craft:2:1001", got)
 
 
+class NewRuleDates(unittest.TestCase):
+    def test_a_rule_date_the_app_doesnt_know_shows_as_major(self):
+        clock = {"clock": {"epochRealMs": 0, "epochGameDay": 1000.0, "timeScale": 24}}
+        tapped = {"/clock": clock, "/craft": {"landing": {"rulesDay": 1463.0}, "missions": []},
+                  "/industry": {"power": {"rulesDay": 1300.0}}}
+        entries = pocket_calendar.build(tapped, 0)
+        new = [e for e in entries if e["id"].startswith("rules:")]
+        self.assertEqual([(e["title"], e["day"], e["major"]) for e in new], [("New game rule: Landing", 1463.0, True)])
+        self.assertIn("/craft → landing.rulesDay", new[0]["about"])
+        self.assertEqual(pocket_calendar._tidy_field("liftRulesDay"), "Lift")
+
+
 if __name__ == "__main__":
     unittest.main()
