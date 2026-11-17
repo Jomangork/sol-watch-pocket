@@ -392,7 +392,7 @@ class WithBridge(unittest.TestCase):
             self.runner._patch(self.sw)
             api = self.sw.SolApi("k")
             api.get("/research", reader="ResearchWatcher")
-            api.get("/fleets")
+            api.get("/news")  # a reply the app doesn't keep
             self.assertEqual(self.runner.tapped, {"/research": {"path": "/research"}})
         finally:
             self.sw.SolApi._pocket_original_get = original
