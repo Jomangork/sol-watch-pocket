@@ -1,3 +1,7 @@
+> **RETIRED. This project is no longer supported.**
+>
+> Sol Watch Pocket (0.9.x) has been replaced by a new, separate Sol Watch app written from scratch (in testing, not public). This repository stays online for reference only: no updates, no fixes, no support. It is not renamed or archived so that installed copies can still look for updates here, but there will be none. The game's API can change, and this app may stop working at any time.
+
 # Sol Watch
 
 Formerly Sol Watch (renamed in 0.8.2; the repository keeps its name so updates keep working).
